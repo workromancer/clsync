@@ -27,8 +27,13 @@ import {
   listBothScopes
 } from "../src/repo-sync.js";
 
-// ASCII Art Banner - Cool cyberpunk style
-const banner = `
+// Get terminal width
+function getTerminalWidth() {
+  return process.stdout.columns || 80;
+}
+
+// ASCII Art Banner - Full version (needs 55+ columns)
+const bannerFull = `
 ${chalk.cyan('   ██████╗██╗     ███████╗██╗   ██╗███╗   ██╗ ██████╗')}
 ${chalk.cyan('  ██╔════╝██║     ██╔════╝╚██╗ ██╔╝████╗  ██║██╔════╝')}
 ${chalk.cyan('  ██║     ██║     ███████╗ ╚████╔╝ ██╔██╗ ██║██║     ')}
@@ -39,34 +44,398 @@ ${chalk.dim('  ─────────────────────�
 ${chalk.dim('   Claude Code Environment Sync')}              ${chalk.cyan('v1.0.0')}
 `;
 
-function showBanner() { 
-  console.log(banner); 
+// Compact banner (for 40-54 columns)
+const bannerCompact = `
+${chalk.cyan.bold('  ╔═══════════════════════════╗')}
+${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v1.0.0')}           ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ║')}  ${chalk.dim('Claude Code Sync')}        ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ╚═══════════════════════════╝')}
+`;
+
+// Minimal banner (for <40 columns)
+const bannerMinimal = `
+${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v1.0.0')}
+${chalk.dim('Claude Code Sync')}
+`;
+
+function showBanner() {
+  const width = getTerminalWidth();
+  if (width >= 55) {
+    console.log(bannerFull);
+  } else if (width >= 35) {
+    console.log(bannerCompact);
+  } else {
+    console.log(bannerMinimal);
+  }
 }
 
 function showSuccess(msg = 'Complete!') {
-  console.log(`
+  const width = getTerminalWidth();
+  if (width >= 50) {
+    console.log(`
 ${chalk.green('  ╔═══════════════════════════════════════════╗')}
 ${chalk.green('  ║')}  ${chalk.white('✓')} ${chalk.green.bold(msg.padEnd(38))}${chalk.green('║')}
 ${chalk.green('  ╚═══════════════════════════════════════════╝')}
 `);
+  } else {
+    console.log(`\n${chalk.green('  ✓')} ${chalk.green.bold(msg)}\n`);
+  }
 }
 
 function showError(msg) {
-  console.log(`
+  const width = getTerminalWidth();
+  if (width >= 50) {
+    console.log(`
 ${chalk.red('  ╔═══════════════════════════════════════════╗')}
 ${chalk.red('  ║')}  ${chalk.white('✗')} ${chalk.red('Error')}                                  ${chalk.red('║')}
 ${chalk.red('  ╚═══════════════════════════════════════════╝')}
 ${chalk.dim('  ' + msg)}
 `);
+  } else {
+    console.log(`\n${chalk.red('  ✗ Error:')} ${msg}\n`);
+  }
+}
+
+// Interactive mode imports
+import inquirer from 'inquirer';
+
+// Interactive mode function
+async function interactiveMode() {
+  showBanner();
+  
+  // Get current status
+  const status = await getStatus();
+  const repos = await listPulledRepos();
+  
+  // Show quick status
+  console.log(chalk.dim(`  📦 Local: ${status.local_count} items  |  🔗 Repos: ${repos.length}`));
+  console.log();
+  
+  const { action } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { name: '📊 View status', value: 'status' },
+        { name: '📦 Browse pulled repositories', value: 'repos' },
+        { name: '📥 Apply items from repo', value: 'apply' },
+        { name: '🔍 Pull new repository', value: 'pull' },
+        { name: '🔀 Compare scopes (user vs project)', value: 'scopes' },
+        { name: '❓ Help', value: 'help' },
+        { name: '👋 Exit', value: 'exit' }
+      ]
+    }
+  ]);
+  
+  switch (action) {
+    case 'status':
+      await showStatusInteractive();
+      break;
+    case 'repos':
+      await browseReposInteractive();
+      break;
+    case 'apply':
+      await applyInteractive();
+      break;
+    case 'pull':
+      await pullInteractive();
+      break;
+    case 'scopes':
+      await scopesInteractive();
+      break;
+    case 'help':
+      program.help();
+      break;
+    case 'exit':
+      console.log(chalk.dim('\n  Bye! 👋\n'));
+      process.exit(0);
+  }
+}
+
+async function showStatusInteractive() {
+  const status = await getStatus();
+  
+  console.log(chalk.cyan('\n  📊 Staging Area Status\n'));
+  console.log(chalk.dim(`  Location: ~/.clsync`));
+  console.log(chalk.dim(`  Last updated: ${status.last_updated || 'Never'}\n`));
+  
+  console.log(chalk.white.bold('  📦 Local Staged:') + chalk.dim(` ${status.local_count} items`));
+  console.log(chalk.white.bold('  🔗 Repositories:') + chalk.dim(` ${status.repos_count} repos\n`));
+  
+  await backToMenu();
+}
+
+async function browseReposInteractive() {
+  const repos = await listPulledRepos();
+  
+  if (repos.length === 0) {
+    console.log(chalk.yellow('\n  No repositories pulled yet.\n'));
+    console.log(chalk.dim('  Pull a repository first: clsync pull owner/repo\n'));
+    await backToMenu();
+    return;
+  }
+  
+  const { selectedRepo } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'selectedRepo',
+      message: 'Select a repository:',
+      choices: [
+        ...repos.map(r => ({ name: `📁 ${r.name} (${r.items.length} items)`, value: r })),
+        new inquirer.Separator(),
+        { name: '← Back to menu', value: null }
+      ]
+    }
+  ]);
+  
+  if (!selectedRepo) {
+    await interactiveMode();
+    return;
+  }
+  
+  // Show items in selected repo
+  console.log(chalk.cyan(`\n  📁 ${selectedRepo.name}\n`));
+  
+  const skills = selectedRepo.items.filter(i => i.type === 'skill');
+  const agents = selectedRepo.items.filter(i => i.type === 'agent');
+  const styles = selectedRepo.items.filter(i => i.type === 'output-style');
+  
+  if (skills.length > 0) console.log(chalk.dim(`  🎯 Skills: ${skills.length}`));
+  if (agents.length > 0) console.log(chalk.dim(`  🤖 Subagents: ${agents.length}`));
+  if (styles.length > 0) console.log(chalk.dim(`  ✨ Output Styles: ${styles.length}`));
+  console.log();
+  
+  const { repoAction } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'repoAction',
+      message: 'What would you like to do?',
+      choices: [
+        { name: '📥 Apply all to ~/.claude (user)', value: 'apply-user' },
+        { name: '📥 Apply all to .claude (project)', value: 'apply-project' },
+        { name: '📋 Select specific items to apply', value: 'select' },
+        new inquirer.Separator(),
+        { name: '← Back', value: 'back' }
+      ]
+    }
+  ]);
+  
+  if (repoAction === 'back') {
+    await browseReposInteractive();
+    return;
+  }
+  
+  if (repoAction === 'apply-user' || repoAction === 'apply-project') {
+    const scope = repoAction === 'apply-user' ? 'user' : 'project';
+    const destLabel = scope === 'user' ? '~/.claude' : '.claude';
+    
+    console.log(chalk.cyan(`\n  📥 Applying all to ${destLabel}...\n`));
+    const spinner = ora('Applying...').start();
+    const results = await applyAll(scope, selectedRepo.name);
+    spinner.succeed(`Applied ${results.length} items`);
+    
+    for (const r of results) {
+      if (r.error) {
+        console.log(chalk.red(`     ✗ ${r.item.name}: ${r.error}`));
+      } else {
+        console.log(chalk.dim(`     ✓ ${r.item.name}`));
+      }
+    }
+    showSuccess('Apply Complete!');
+  }
+  
+  if (repoAction === 'select') {
+    const { items } = await inquirer.prompt([
+      {
+        type: 'checkbox',
+        name: 'items',
+        message: 'Select items to apply:',
+        choices: selectedRepo.items.map(item => {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          return { name: `${icon} ${item.name}`, value: item.name };
+        }),
+        pageSize: 20
+      }
+    ]);
+    
+    if (items.length > 0) {
+      const { targetScope } = await inquirer.prompt([
+        {
+          type: 'rawlist',
+          name: 'targetScope',
+          message: 'Apply to:',
+          choices: [
+            { name: '~/.claude (user)', value: 'user' },
+            { name: '.claude (project)', value: 'project' }
+          ]
+        }
+      ]);
+      
+      console.log();
+      for (const itemName of items) {
+        try {
+          const result = await applyItem(itemName, targetScope, selectedRepo.name);
+          console.log(chalk.dim(`  ✓ ${itemName}`));
+        } catch (e) {
+          console.log(chalk.red(`  ✗ ${itemName}: ${e.message}`));
+        }
+      }
+      showSuccess('Apply Complete!');
+    }
+  }
+  
+  await backToMenu();
+}
+
+async function applyInteractive() {
+  const repos = await listPulledRepos();
+  const localItems = await listLocalStaged();
+  
+  if (repos.length === 0 && localItems.length === 0) {
+    console.log(chalk.yellow('\n  No items available to apply.\n'));
+    console.log(chalk.dim('  Pull a repository first: clsync pull owner/repo\n'));
+    await backToMenu();
+    return;
+  }
+  
+  const sources = [];
+  if (localItems.length > 0) {
+    sources.push({ name: `📦 Local staging (${localItems.length} items)`, value: 'local' });
+  }
+  for (const repo of repos) {
+    sources.push({ name: `📁 ${repo.name} (${repo.items.length} items)`, value: repo.name });
+  }
+  sources.push(new inquirer.Separator());
+  sources.push({ name: '← Back', value: null });
+  
+  const { source } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'source',
+      message: 'Select source:',
+      choices: sources
+    }
+  ]);
+  
+  if (!source) {
+    await interactiveMode();
+    return;
+  }
+  
+  // Redirect to browse repos with this source selected
+  const selectedRepo = repos.find(r => r.name === source) || { name: 'local', items: localItems };
+  
+  const { targetScope } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'targetScope',
+      message: 'Apply to:',
+      choices: [
+        { name: '~/.claude (user)', value: 'user' },
+        { name: '.claude (project)', value: 'project' }
+      ]
+    }
+  ]);
+  
+  const destLabel = targetScope === 'user' ? '~/.claude' : '.claude';
+  console.log(chalk.cyan(`\n  📥 Applying all to ${destLabel}...\n`));
+  const spinner = ora('Applying...').start();
+  const results = await applyAll(targetScope, source);
+  spinner.succeed(`Applied ${results.length} items`);
+  
+  showSuccess('Apply Complete!');
+  await backToMenu();
+}
+
+async function pullInteractive() {
+  const { repo } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'repo',
+      message: 'Enter repository (owner/repo):',
+      validate: input => input.includes('/') || 'Please use format: owner/repo'
+    }
+  ]);
+  
+  console.log(chalk.cyan(`\n  📥 Pulling: ${repo}\n`));
+  const spinner = ora('Fetching from GitHub...').start();
+  
+  try {
+    const results = await pullFromGitHub(repo, { force: false });
+    spinner.succeed(`Downloaded ${results.downloaded} files (skipped ${results.skipped})`);
+    showSuccess('Pull Complete!');
+  } catch (error) {
+    spinner.fail('Pull failed');
+    showError(error.message);
+  }
+  
+  await backToMenu();
+}
+
+async function scopesInteractive() {
+  const { project, user } = await listBothScopes();
+  
+  console.log(chalk.cyan('\n  👁 Comparing Scopes\n'));
+  
+  console.log(chalk.white.bold('  📁 User (~/.claude)'));
+  if (user.length === 0) {
+    console.log(chalk.dim('     (empty)'));
+  } else {
+    for (const item of user) {
+      const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+      console.log(chalk.dim(`     ${icon} ${item.name}`));
+    }
+  }
+  console.log();
+  
+  console.log(chalk.white.bold('  📁 Project (.claude)'));
+  if (project.length === 0) {
+    console.log(chalk.dim('     (empty)'));
+  } else {
+    for (const item of project) {
+      const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+      console.log(chalk.dim(`     ${icon} ${item.name}`));
+    }
+  }
+  console.log();
+  
+  await backToMenu();
+}
+
+async function backToMenu() {
+  const { back } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'back',
+      message: 'Back to menu?',
+      default: true
+    }
+  ]);
+  
+  if (back) {
+    console.clear();
+    await interactiveMode();
+  } else {
+    console.log(chalk.dim('\n  Bye! 👋\n'));
+  }
 }
 
 // Show banner only for --version and --help
 const args = process.argv.slice(2);
 if (args.includes('--version') || args.includes('-V') || 
-    args.includes('--help') || args.includes('-h') || 
-    args.length === 0) {
+    args.includes('--help') || args.includes('-h')) {
   showBanner();
 }
+
+// Handle interactive mode when no arguments
+if (args.length === 0) {
+  interactiveMode().catch(err => {
+    showError(err.message);
+    process.exit(1);
+  });
+} else {
+  // Normal CLI mode
 
 // Main program
 program
@@ -681,3 +1050,4 @@ program
 
 program.parse();
 
+} // end of else block for interactive mode
