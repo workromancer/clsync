@@ -847,6 +847,12 @@ server.tool(
     },
   },
   async ({ name, force = false, rename }) => {
+    if (!name) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
+        isError: true,
+      };
+    }
     try {
       const result = await promoteItem(name, { force, rename });
       let text = `✅ Promoted ${result.item.type}: ${result.newName}\n\n`;
@@ -881,6 +887,12 @@ server.tool(
     },
   },
   async ({ name, force = false, rename }) => {
+    if (!name) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
+        isError: true,
+      };
+    }
     try {
       const result = await demoteItem(name, { force, rename });
       let text = `✅ Demoted ${result.item.type}: ${result.newName}\n\n`;
