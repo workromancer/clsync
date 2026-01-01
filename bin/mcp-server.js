@@ -17,7 +17,7 @@ import { trackDocs } from "../src/index.js";
 // Create MCP server
 const server = new McpServer({
   name: "clsync",
-  version: "0.2.2",
+  version: "0.2.3",
 });
 
 // =============================================================================
@@ -603,6 +603,7 @@ server.registerTool(
 
 import { 
   pullFromGitHub, 
+  pushToGitHub,
   listLocalStaged, 
   browseRepo, 
   applyItem,
@@ -629,6 +630,41 @@ server.registerTool(
       const summary = `Downloaded ${results.downloaded} files to ~/.clsync/repos/${results.repoPath}` +
         (results.skipped > 0 ? ` (skipped ${results.skipped})` : "");
       return { content: [{ type: "text", text: `✅ Pull Complete!\n\n${summary}\n\nUse apply_setting to apply items.` }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
+    }
+  }
+);
+
+server.registerTool(
+  "push_settings",
+  {
+    description: "Push settings to a GitHub repository. Requires git to be installed and authenticated.",
+    inputSchema: {
+      repo: z.string().describe('GitHub repository (e.g., "owner/repo")'),
+      scope: z.enum(["local", "user", "project"]).optional().describe('Source scope: "local" (~/.clsync/local), "user" (~/.claude), or "project" (.claude). Default: local'),
+      message: z.string().optional().describe("Commit message"),
+      force: z.boolean().optional().describe("Force push (overwrites remote)"),
+    },
+  },
+  async ({ repo, scope = "local", message = "Update clsync settings", force = false }) => {
+    try {
+      const results = await pushToGitHub(scope, { repo, message, force });
+      
+      if (results.pushed) {
+        let text = `✅ Push Complete!\n\n`;
+        text += `Pushed ${results.pushed} items to ${results.repo}\n\n`;
+        text += `Items:\n`;
+        for (const item of results.items) {
+          text += `  - ${item.type}: ${item.name}\n`;
+        }
+        text += `\nOthers can now use:\n  clsync pull ${results.repo}`;
+        return { content: [{ type: "text", text }] };
+      } else if (results.prepared) {
+        return { content: [{ type: "text", text: results.instructions }] };
+      }
+      
+      return { content: [{ type: "text", text: "Push completed" }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
     }

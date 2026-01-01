@@ -879,3 +879,227 @@ export async function pullOnlineRepo(repoInfo, options = {}) {
   
   return await pullFromGitHub(repoPath, options);
 }
+
+// =============================================================================
+// PUSH TO GITHUB
+// =============================================================================
+
+import { exec as execCallback } from "child_process";
+import { promisify } from "util";
+const exec = promisify(execCallback);
+
+/**
+ * Check if git is available
+ */
+async function isGitAvailable() {
+  try {
+    await exec("git --version");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if directory is a git repo
+ */
+async function isGitRepo(dir) {
+  try {
+    await exec("git rev-parse --git-dir", { cwd: dir });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get git remote URL
+ */
+async function getGitRemote(dir) {
+  try {
+    const { stdout } = await exec("git remote get-url origin", { cwd: dir });
+    return stdout.trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Push settings to GitHub repository
+ * @param {string} scope - 'user', 'project', or 'local'
+ * @param {object} options - { repo, message, force }
+ */
+export async function pushToGitHub(scope = "local", options = {}) {
+  const { repo, message = "Update clsync settings", force = false, onProgress } = options;
+  const log = (msg) => onProgress && onProgress(msg);
+
+  // Check git availability
+  if (!(await isGitAvailable())) {
+    throw new Error("Git is not installed. Please install git first.");
+  }
+
+  // Determine source directory
+  let sourceDir;
+  let items;
+  
+  if (scope === "local") {
+    await initClsync();
+    sourceDir = LOCAL_DIR;
+    items = await listLocalStaged();
+  } else if (scope === "user") {
+    sourceDir = getUserClaudeDir();
+    items = await scanItems(sourceDir);
+  } else if (scope === "project") {
+    sourceDir = getProjectClaudeDir();
+    items = await scanItems(sourceDir);
+  } else {
+    throw new Error(`Invalid scope: ${scope}. Use 'local', 'user', or 'project'`);
+  }
+
+  if (items.length === 0) {
+    throw new Error(`No settings found in ${scope} scope to push.`);
+  }
+
+  // Create temp directory for push
+  const tempDir = join(os.tmpdir(), `clsync-push-${Date.now()}`);
+  await mkdir(tempDir, { recursive: true });
+
+  log(`Preparing ${items.length} items for push...`);
+
+  // Copy items to temp directory
+  for (const dir of SETTINGS_DIRS) {
+    await mkdir(join(tempDir, dir), { recursive: true });
+  }
+
+  for (const item of items) {
+    const sourcePath = join(sourceDir, item.path);
+    const destPath = join(tempDir, item.path);
+    
+    await mkdir(dirname(destPath), { recursive: true });
+    
+    if (item.type === "skill") {
+      await cp(sourcePath, destPath, { recursive: true });
+    } else {
+      const content = await readFile(sourcePath, "utf-8");
+      await writeFile(destPath, content, "utf-8");
+    }
+  }
+
+  // Create clsync.json metadata
+  const clsyncJson = {
+    $schema: "https://clsync.dev/schema/v1.json",
+    version: "1.0.0",
+    description: "Claude Code settings repository",
+    author: os.userInfo().username,
+    updated_at: new Date().toISOString(),
+    items: items.map((item) => ({
+      type: item.type,
+      name: item.name,
+      path: item.path,
+      description: item.description || null,
+    })),
+    stats: {
+      skills: items.filter((i) => i.type === "skill").length,
+      agents: items.filter((i) => i.type === "agent").length,
+      output_styles: items.filter((i) => i.type === "output-style").length,
+      total: items.length,
+    },
+  };
+
+  await writeFile(
+    join(tempDir, "clsync.json"),
+    JSON.stringify(clsyncJson, null, 2),
+    "utf-8"
+  );
+
+  // Create README.md
+  const readmeContent = `# Claude Code Settings
+
+This repository contains Claude Code settings managed by [clsync](https://github.com/workromancer/clsync).
+
+## Contents
+
+${items.map(i => `- **${i.type}**: ${i.name}`).join('\n')}
+
+## Usage
+
+\`\`\`bash
+# Install clsync
+npm install -g clsync
+
+# Pull and apply these settings
+clsync pull ${repo || 'owner/repo'}
+clsync apply <setting-name>
+\`\`\`
+
+## Stats
+
+- Skills: ${clsyncJson.stats.skills}
+- Agents: ${clsyncJson.stats.agents}
+- Output Styles: ${clsyncJson.stats.output_styles}
+
+---
+*Last updated: ${new Date().toLocaleString()}*
+`;
+
+  await writeFile(join(tempDir, "README.md"), readmeContent, "utf-8");
+
+  // Initialize git and push
+  log("Initializing git repository...");
+  await exec("git init", { cwd: tempDir });
+  await exec("git add -A", { cwd: tempDir });
+  await exec(`git commit -m "${message}"`, { cwd: tempDir });
+
+  if (repo) {
+    const repoUrl = repo.startsWith("http") 
+      ? repo 
+      : `https://github.com/${repo}.git`;
+    
+    log(`Pushing to ${repo}...`);
+    
+    try {
+      await exec(`git remote add origin ${repoUrl}`, { cwd: tempDir });
+    } catch {
+      // Remote might already exist
+    }
+    
+    const forceFlag = force ? " --force" : "";
+    try {
+      await exec(`git push -u origin main${forceFlag}`, { cwd: tempDir });
+    } catch (error) {
+      // Try master branch if main fails
+      try {
+        await exec(`git branch -m master main`, { cwd: tempDir });
+        await exec(`git push -u origin main${forceFlag}`, { cwd: tempDir });
+      } catch {
+        throw new Error(
+          `Failed to push to ${repo}.\n\n` +
+          `Make sure:\n` +
+          `  1. The repository exists on GitHub\n` +
+          `  2. You have push access to it\n` +
+          `  3. You're authenticated with git (gh auth login or git credentials)\n\n` +
+          `Error: ${error.message}`
+        );
+      }
+    }
+
+    // Cleanup
+    await rm(tempDir, { recursive: true, force: true });
+
+    return {
+      pushed: items.length,
+      items,
+      repo,
+      scope,
+    };
+  } else {
+    // No repo specified - return temp directory path for manual push
+    return {
+      prepared: items.length,
+      items,
+      tempDir,
+      scope,
+      instructions: `Files prepared at: ${tempDir}\n\nTo push manually:\n  cd ${tempDir}\n  git remote add origin https://github.com/YOUR/REPO.git\n  git push -u origin main`,
+    };
+  }
+}

@@ -16,6 +16,7 @@ import {
   applyAll,
   unstageItem,
   pullFromGitHub,
+  pushToGitHub,
   browseRepo,
   getStatus,
   exportForPush,
@@ -43,20 +44,20 @@ ${chalk.cyan('  ██║     ██║     ╚════██║  ╚██�
 ${chalk.cyan('  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗')}
 ${chalk.cyan('   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝')}
 ${chalk.dim('  ───────────────────────────────────────────────────')}
-${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.2')}
+${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.3')}
 `;
 
 // Compact banner (for 40-54 columns)
 const bannerCompact = `
 ${chalk.cyan.bold('  ╔═══════════════════════════╗')}
-${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.2')}      ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.3')}      ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ║')}  ${chalk.dim('Claude Code Sync')}        ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ╚═══════════════════════════╝')}
 `;
 
 // Minimal banner (for <40 columns)
 const bannerMinimal = `
-${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v0.2.2')}
+${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v0.2.3')}
 ${chalk.dim('Claude Code Sync')}
 `;
 
@@ -563,7 +564,7 @@ if (args.length === 0) {
 program
   .name("clsync")
   .description("Sync Claude Code settings via ~/.clsync staging area")
-  .version("0.2.2");
+  .version("0.2.3");
 
 // ============================================================================
 // INIT
@@ -817,6 +818,53 @@ program
       
       console.log(chalk.dim(`\n  Next: clsync apply --all -s ${results.repoPath} -u`));
       showSuccess('Pull Complete!');
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// PUSH
+// ============================================================================
+program
+  .command("push [repo]")
+  .description("Push settings to GitHub repository")
+  .option("-s, --scope <scope>", "Scope: local, user, or project", "local")
+  .option("-m, --message <msg>", "Commit message", "Update clsync settings")
+  .option("-f, --force", "Force push (overwrites remote)")
+  .option("-v, --verbose", "Verbose output")
+  .action(async (repo, options) => {
+    try {
+      const scope = options.scope;
+      const scopeLabel = scope === 'local' ? '~/.clsync/local' : 
+                         scope === 'user' ? '~/.claude' : '.claude';
+      
+      console.log(chalk.cyan(`  📤 Pushing from: ${scopeLabel}\n`));
+      
+      const spinner = ora('Preparing settings for push...').start();
+      const results = await pushToGitHub(scope, {
+        repo,
+        message: options.message,
+        force: options.force,
+        onProgress: msg => { if (options.verbose) spinner.text = msg; }
+      });
+      
+      if (results.pushed) {
+        spinner.succeed(`Pushed ${results.pushed} items to ${results.repo}`);
+        
+        console.log(chalk.dim(`\n  Items pushed:`));
+        for (const item of results.items) {
+          console.log(chalk.dim(`     ✓ ${item.type}: ${item.name}`));
+        }
+        
+        console.log(chalk.dim(`\n  Others can now use:`));
+        console.log(chalk.dim(`     clsync pull ${results.repo}`));
+        showSuccess('Push Complete!');
+      } else if (results.prepared) {
+        spinner.succeed(`Prepared ${results.prepared} items for push`);
+        console.log(chalk.yellow(`\n  ${results.instructions}`));
+      }
     } catch (error) {
       showError(error.message);
       process.exit(1);
