@@ -831,19 +831,19 @@ server.tool(
 
 server.tool(
   "promote_setting",
-  "Move setting from .claude (project) → ~/.claude (user) for global access",
+  "Move a skill/agent/output-style from project .claude → user ~/.claude for global access. Example: promote_setting name='my-skill'",
   {
     name: {
       type: "string",
-      description: "Name of the setting to promote",
+      description: "REQUIRED: Name of the skill, agent, or output-style to promote (e.g., 'update-project-docs')",
     },
     force: {
       type: "boolean",
-      description: "Overwrite if exists in target",
+      description: "Optional: Overwrite if exists in target",
     },
     rename: {
       type: "string",
-      description: "New name to avoid conflict",
+      description: "Optional: New name to avoid conflict",
     },
   },
   async ({ name, force = false, rename }) => {
@@ -871,19 +871,19 @@ server.tool(
 
 server.tool(
   "demote_setting",
-  "Move setting from ~/.claude (user) → .claude (project) for project-specific use",
+  "Move a skill/agent/output-style from user ~/.claude → project .claude for project-specific use. Example: demote_setting name='my-skill'",
   {
     name: {
       type: "string",
-      description: "Name of the setting to demote",
+      description: "REQUIRED: Name of the skill, agent, or output-style to demote (e.g., 'update-project-docs')",
     },
     force: {
       type: "boolean",
-      description: "Overwrite if exists in target",
+      description: "Optional: Overwrite if exists in target",
     },
     rename: {
       type: "string",
-      description: "New name to avoid conflict",
+      description: "Optional: New name to avoid conflict",
     },
   },
   async ({ name, force = false, rename }) => {
