@@ -20,11 +20,6 @@ const LOCAL_DIR = join(CLSYNC_DIR, "local");
 const REPOS_DIR = join(CLSYNC_DIR, "repos");
 const MANIFEST_FILE = join(CLSYNC_DIR, "manifest.json");
 
-// Project-local .clsync directory (for project-specific shared settings)
-function getProjectClsyncDir() {
-  return join(process.cwd(), ".clsync");
-}
-
 /**
  * Initialize ~/.clsync directory
  */
@@ -796,75 +791,4 @@ export async function listBothScopes() {
     project: projectItems,
     user: userItems,
   };
-}
-
-// =============================================================================
-// PROJECT .clsync (shared project settings from .clsync directory)
-// =============================================================================
-
-/**
- * List items in project .clsync directory
- */
-export async function listProjectClsync() {
-  const projectClsyncDir = getProjectClsyncDir();
-  
-  if (!existsSync(projectClsyncDir)) {
-    return [];
-  }
-  
-  return await scanItems(projectClsyncDir);
-}
-
-/**
- * Load item from .clsync to destination (.claude or ~/.claude)
- * @param {string} itemName - Item name to load
- * @param {string} scope - 'user' or 'project'
- */
-export async function loadFromProjectClsync(itemName, scope = 'project') {
-  const projectClsyncDir = getProjectClsyncDir();
-  
-  if (!existsSync(projectClsyncDir)) {
-    throw new Error(`No .clsync directory found in current project`);
-  }
-  
-  const items = await scanItems(projectClsyncDir);
-  const item = items.find(i => i.name === itemName);
-  
-  if (!item) {
-    throw new Error(`Item "${itemName}" not found in .clsync`);
-  }
-  
-  const sourcePath = join(projectClsyncDir, item.path);
-  const destDir = getClaudeDir(scope);
-  const destPath = join(destDir, item.path);
-  
-  await mkdir(dirname(destPath), { recursive: true });
-  
-  if (item.type === 'skill') {
-    await cp(sourcePath, destPath, { recursive: true });
-  } else {
-    const content = await readFile(sourcePath, 'utf-8');
-    await writeFile(destPath, content, 'utf-8');
-  }
-  
-  return { item, path: destPath, scope };
-}
-
-/**
- * Load all items from .clsync to destination
- */
-export async function loadAllFromProjectClsync(scope = 'project') {
-  const items = await listProjectClsync();
-  const results = [];
-  
-  for (const item of items) {
-    try {
-      const result = await loadFromProjectClsync(item.name, scope);
-      results.push(result);
-    } catch (e) {
-      results.push({ item, error: e.message });
-    }
-  }
-  
-  return results;
 }
