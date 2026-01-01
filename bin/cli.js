@@ -60,6 +60,14 @@ ${chalk.dim('  ' + msg)}
 `);
 }
 
+// Show banner only for --version and --help
+const args = process.argv.slice(2);
+if (args.includes('--version') || args.includes('-V') || 
+    args.includes('--help') || args.includes('-h') || 
+    args.length === 0) {
+  showBanner();
+}
+
 // Main program
 program
   .name("clsync")
@@ -74,7 +82,7 @@ program
   .description("Initialize ~/.clsync directory")
   .action(async () => {
     try {
-      showBanner();
+      
       await initClsync();
       console.log(chalk.cyan('  ✓ Initialized ~/.clsync\n'));
       console.log(chalk.dim('  Structure:'));
@@ -100,7 +108,7 @@ program
   .description("Show ~/.clsync status")
   .action(async () => {
     try {
-      showBanner();
+      
       const status = await getStatus();
       
       console.log(chalk.cyan('  📊 Staging Area Status\n'));
@@ -151,7 +159,7 @@ program
   .option("-a, --all", "Stage all items")
   .action(async (name, options) => {
     try {
-      showBanner();
+      
       const scope = options.project ? "project" : "user";
       const sourceLabel = scope === 'project' ? '.claude' : '~/.claude';
       
@@ -197,7 +205,7 @@ program
   .option("-a, --all", "Apply all items")
   .action(async (name, options) => {
     try {
-      showBanner();
+      
       
       let destLabel, scope;
       if (options.dir) {
@@ -238,6 +246,32 @@ program
       
       showSuccess('Apply Complete!');
     } catch (error) {
+      // Enhanced error message for "not found" errors
+      if (error.message.includes('not found')) {
+        showError(error.message);
+        console.log(chalk.dim('  💡 Tips:\n'));
+        
+        if (!options.source) {
+          // User didn't specify a source, suggest pulled repos
+          const repos = await listPulledRepos();
+          if (repos.length > 0) {
+            console.log(chalk.dim('  You have pulled repositories. Use -s to specify source:\n'));
+            for (const repo of repos) {
+              console.log(chalk.cyan(`     clsync apply ${name || '<name>'} -s ${repo.name} -u`));
+            }
+            console.log();
+          } else {
+            console.log(chalk.dim('  No pulled repositories. Try pulling one first:\n'));
+            console.log(chalk.cyan('     clsync pull owner/repo'));
+            console.log(chalk.cyan('     clsync apply --all -s owner/repo -u\n'));
+          }
+        } else {
+          console.log(chalk.dim('  Check item name with:\n'));
+          console.log(chalk.cyan(`     clsync list ${options.source}\n`));
+        }
+        process.exit(1);
+      }
+      
       showError(error.message);
       process.exit(1);
     }
@@ -251,7 +285,7 @@ program
   .description("Remove item from ~/.clsync/local")
   .action(async (name) => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan(`  🗑️  Unstaging: ${name}\n`));
       await unstageItem(name);
       console.log(chalk.dim(`     ✓ Removed from local staging`));
@@ -272,7 +306,7 @@ program
   .option("-v, --verbose", "Verbose output")
   .action(async (repo, options) => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan(`  📥 Pulling: ${repo}\n`));
       
       const spinner = ora('Fetching from GitHub...').start();
@@ -306,7 +340,7 @@ program
   .description("Browse available settings in a GitHub repository")
   .action(async (repo) => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan(`  🔍 Browsing: ${repo}\n`));
       
       const spinner = ora('Fetching...').start();
@@ -374,7 +408,7 @@ program
   .description("List items (local or from a repo)")
   .action(async (source) => {
     try {
-      showBanner();
+      
       
       let items, label;
       
@@ -426,7 +460,7 @@ program
   .description("List pulled repositories")
   .action(async () => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan('  📦 Pulled Repositories\n'));
       
       const repos = await listPulledRepos();
@@ -466,7 +500,7 @@ program
   .option("-d, --desc <text>", "Description for clsync.json")
   .action(async (dir, options) => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan(`  📤 Exporting to: ${dir}\n`));
       
       const spinner = ora('Exporting...').start();
@@ -509,7 +543,7 @@ program
   .option("-f, --force", "Overwrite")
   .action(async (options) => {
     try {
-      showBanner();
+      
       const config = await loadConfig(options.config);
       const scope = options.project ? "project" : "user";
       
@@ -540,7 +574,7 @@ program
   .option("-r, --rename <newname>", "Rename to avoid conflict")
   .action(async (name, options) => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan(`  📤 Promoting: ${name}\n`));
       console.log(chalk.dim(`  From: .claude (project)`));
       console.log(chalk.dim(`  To:   ~/.claude (user)\n`));
@@ -574,7 +608,7 @@ program
   .option("-r, --rename <newname>", "Rename to avoid conflict")
   .action(async (name, options) => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan(`  📥 Demoting: ${name}\n`));
       console.log(chalk.dim(`  From: ~/.claude (user)`));
       console.log(chalk.dim(`  To:   .claude (project)\n`));
@@ -606,7 +640,7 @@ program
   .description("Compare settings in user (~/.claude) and project (.claude)")
   .action(async () => {
     try {
-      showBanner();
+      
       console.log(chalk.cyan('  👁 Comparing Scopes\n'));
       
       const { project, user } = await listBothScopes();

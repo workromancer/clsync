@@ -68,7 +68,12 @@ function getRepoDir(repoUrl) {
 export async function loadManifest() {
   try {
     const content = await readFile(MANIFEST_FILE, "utf-8");
-    return JSON.parse(content);
+    const manifest = JSON.parse(content);
+    // Ensure repos field exists
+    if (!manifest.repos) {
+      manifest.repos = {};
+    }
+    return manifest;
   } catch {
     return { version: "1.0.0", repos: {}, last_updated: null };
   }
