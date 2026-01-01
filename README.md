@@ -11,6 +11,10 @@
   <b>🔄 Sync your Claude Code environment across machines</b>
 </p>
 
+<p align="center">
+  <a href="README.ko.md">한국어</a>
+</p>
+
 ```
   ┌───────────────────────────────────────┐
   │  CLSYNC                              │
@@ -18,85 +22,85 @@
   └───────────────────────────────────────┘
 ```
 
-여러 컴퓨터에서 Claude Code 환경을 동기화합니다.
-문서, skills, subagents, output styles를 한 곳에서 관리하세요.
+Sync your Claude Code environment across multiple machines.
+Manage docs, skills, subagents, and output styles in one place.
 
 ---
 
-## ✨ 주요 기능
+## ✨ Features
 
-- 🔄 **환경 동기화** - Claude Code 문서와 설정을 여러 컴퓨터에서 동기화
-- 🎯 **Skills 관리** - 스킬 생성, 조회, 동기화
-- 🤖 **Subagents 관리** - 서브에이전트 생성 및 관리
-- ✨ **Output Styles 관리** - 커스텀 출력 스타일 생성
-- 🔌 **MCP 서버** - Claude Code에서 직접 사용
+- 🔄 **Environment Sync** - Sync Claude Code docs and settings across machines
+- 🎯 **Skills Management** - Create, list, and sync skills
+- 🤖 **Subagents Management** - Create and manage subagents
+- ✨ **Output Styles Management** - Create custom output styles
+- 🔌 **MCP Server** - Use directly within Claude Code
 
-## 📦 설치
+## 📦 Installation
 
 ```bash
-# npm 글로벌 설치
+# Install globally via npm
 npm install -g clsync
 
-# 또는 npx로 바로 실행
+# Or run directly with npx
 npx clsync
 ```
 
-## 🚀 빠른 시작
+## 🚀 Quick Start
 
-### CLI 사용
+### CLI Usage
 
 ```bash
-# 기본 실행 (문서를 ~/.claude/clsync에 저장)
+# Default (saves to ~/.claude/clsync)
 npx clsync
 
-# 프로젝트 폴더에 저장 (.claude/clsync)
+# Save to project folder (.claude/clsync)
 npx clsync -p
 
-# 미리보기 (실제 다운로드 X)
+# Dry run (no actual download)
 npx clsync --dry-run
 
-# 상세 로그 + 큰 배너
+# Verbose mode with large banner
 npx clsync --verbose
 
-# 기존 파일 덮어쓰기
+# Force overwrite existing files
 npx clsync --force
 ```
 
-### MCP 서버로 사용
+### Use as MCP Server
 
 ```bash
-# Claude Code에 MCP 서버 등록
+# Register MCP server with Claude Code
 claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```
 
-## 📖 CLI 옵션
+## 📖 CLI Options
 
 ```
 Usage: clsync [options]
 
 Options:
-  -V, --version        버전 출력
-  -c, --config <path>  설정 파일 경로 (기본: clsync.config.json)
-  -u, --user           ~/.claude/clsync에 저장 (기본값)
-  -p, --project        .claude/clsync에 저장 (현재 디렉터리)
-  -v, --verbose        상세 로그 출력
-  -d, --dry-run        실제 다운로드 없이 미리보기
-  -f, --force          기존 파일 덮어쓰기
-  -h, --help           도움말 출력
+  -V, --version        Output version number
+  -c, --config <path>  Path to config file (default: clsync.config.json)
+  -u, --user           Save to ~/.claude/clsync (default)
+  -p, --project        Save to .claude/clsync (current directory)
+  -v, --verbose        Enable verbose output
+  -d, --dry-run        Show what would be done without making changes
+  -f, --force          Force overwrite existing files
+  -h, --help           Display help
 ```
 
-### 스코프 옵션
+### Scope Options
 
-| 플래그              | 저장 위치          | 용도                           |
-| ------------------- | ------------------ | ------------------------------ |
-| `-u, --user` (기본) | `~/.claude/clsync` | 개인용, 모든 프로젝트에서 공유 |
-| `-p, --project`     | `.claude/clsync`   | 프로젝트별, 버전 관리 가능     |
+| Flag                   | Location           | Use Case                             |
+| ---------------------- | ------------------ | ------------------------------------ |
+| `-u, --user` (default) | `~/.claude/clsync` | Personal, shared across projects     |
+| `-p, --project`        | `.claude/clsync`   | Project-specific, version controlled |
 
-## ⚙️ 설정 파일
+## ⚙️ Configuration
 
-`clsync.config.json` 파일로 동기화할 문서를 설정합니다:
+Configure sources in `clsync.config.json`:
 
-### 기본 설정 (Claude Code 문서)
+### Default (Claude Code Docs)
 
 ```json
 {
@@ -124,7 +128,7 @@ Options:
 }
 ```
 
-### GitHub 리포지토리 동기화
+### GitHub Repository Sync
 
 ```json
 {
@@ -140,73 +144,73 @@ Options:
 }
 ```
 
-## 🔌 MCP 서버
+## 🔌 MCP Server
 
-CLSYNC는 **MCP (Model Context Protocol) 서버**로도 동작합니다.
+CLSYNC also works as an **MCP (Model Context Protocol) server**.
 
-### 설정
+### Setup
 
 ```bash
-# Claude Code에 MCP 서버 등록
+# Register MCP server with Claude Code
 claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```
 
-### 사용 가능한 도구
+### Available Tools
 
-#### 📚 문서 도구
+#### 📚 Documentation Tools
 
-| 도구        | 설명                        |
-| ----------- | --------------------------- |
-| `sync_docs` | 설정된 소스에서 문서 동기화 |
-| `list_docs` | 동기화된 문서 목록 조회     |
-| `read_doc`  | 특정 문서 내용 읽기         |
+| Tool        | Description                                |
+| ----------- | ------------------------------------------ |
+| `sync_docs` | Sync documentation from configured sources |
+| `list_docs` | List all synced documentation files        |
+| `read_doc`  | Read contents of a specific doc file       |
 
-#### 🎯 Skill 도구
+#### 🎯 Skill Tools
 
-| 도구           | 설명                    |
-| -------------- | ----------------------- |
-| `create_skill` | 새 스킬 생성 (SKILL.md) |
-| `list_skills`  | 스킬 목록 조회          |
-| `read_skill`   | 스킬 내용 읽기          |
+| Tool           | Description                   |
+| -------------- | ----------------------------- |
+| `create_skill` | Create a new skill (SKILL.md) |
+| `list_skills`  | List all skills               |
+| `read_skill`   | Read a skill's content        |
 
-#### 🤖 Subagent 도구
+#### 🤖 Subagent Tools
 
-| 도구              | 설명                   |
-| ----------------- | ---------------------- |
-| `create_subagent` | 새 서브에이전트 생성   |
-| `list_subagents`  | 서브에이전트 목록 조회 |
-| `read_subagent`   | 서브에이전트 내용 읽기 |
+| Tool              | Description               |
+| ----------------- | ------------------------- |
+| `create_subagent` | Create a new subagent     |
+| `list_subagents`  | List all subagents        |
+| `read_subagent`   | Read a subagent's content |
 
-#### ✨ Output Style 도구
+#### ✨ Output Style Tools
 
-| 도구                  | 설명                  |
-| --------------------- | --------------------- |
-| `create_output_style` | 새 출력 스타일 생성   |
-| `list_output_styles`  | 출력 스타일 목록 조회 |
+| Tool                  | Description               |
+| --------------------- | ------------------------- |
+| `create_output_style` | Create a new output style |
+| `list_output_styles`  | List all output styles    |
 
-### Claude Code에서 사용 예시
+### Usage Examples in Claude Code
 
 ```
-"Claude Code 문서를 동기화해줘"
-"skills 문서 보여줘"
-"커밋 메시지 생성 스킬 만들어줘"
-"테스트 실행하는 서브에이전트 만들어줘"
-"한국어 출력 스타일 만들어줘"
-"프로젝트 레벨에 코드 리뷰 스킬 추가해줘"
+"Sync the Claude Code documentation"
+"Show me the skills documentation"
+"Create a skill for generating commit messages"
+"Create a test-runner subagent"
+"Create a Korean output style"
+"Add a code review skill at project level"
 ```
 
-### 스코프
+### Scope
 
-모든 도구는 `scope` 파라미터를 지원합니다:
+All tools support the `scope` parameter:
 
-| Scope           | 위치            | 용도                       |
-| --------------- | --------------- | -------------------------- |
-| `"user"` (기본) | `~/.claude/...` | 개인용, 모든 프로젝트 공유 |
-| `"project"`     | `./.claude/...` | 팀 공유, 버전 관리         |
+| Scope              | Location        | Use Case                 |
+| ------------------ | --------------- | ------------------------ |
+| `"user"` (default) | `~/.claude/...` | Personal, all projects   |
+| `"project"`        | `./.claude/...` | Team, version controlled |
 
-## 📁 생성되는 파일 구조
+## 📁 Generated File Structure
 
-### 동기화된 문서
+### Synced Documentation
 
 ```
 ~/.claude/clsync/claude-code/          # User scope
@@ -234,9 +238,9 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 .claude/output-styles/my-style.md      # Project scope
 ```
 
-## 📄 메타데이터
+## 📄 Metadata
 
-동기화된 각 문서 상단에 YAML frontmatter로 메타데이터가 추가됩니다:
+Each synced document includes YAML frontmatter with metadata:
 
 ```yaml
 ---
@@ -245,27 +249,27 @@ downloaded_at: 2026-01-01T03:46:22.704Z
 ---
 ```
 
-## 🎯 사용 시나리오
+## 🎯 Use Cases
 
-### 1. 여러 컴퓨터 환경 동기화
+### 1. Multi-Machine Environment Sync
 
-- 집/회사/노트북에서 동일한 Claude Code 설정 사용
-- Skills, Subagents를 Git으로 버전 관리
+- Use the same Claude Code settings at home/office/laptop
+- Version control Skills and Subagents with Git
 
-### 2. 팀 환경 공유
+### 2. Team Environment Sharing
 
-- `-p` 옵션으로 프로젝트에 설정 저장
-- 팀원들과 동일한 스킬/에이전트 공유
+- Save settings to project with `-p` option
+- Share the same skills/agents with team members
 
-### 3. Claude Code 자동화
+### 3. Claude Code Automation
 
-- MCP 서버로 Claude에서 직접 스킬/에이전트 생성
-- 문서 기반 개발 워크플로우
+- Create skills/agents directly from Claude via MCP server
+- Documentation-driven development workflow
 
-## 🤝 기여
+## 🤝 Contributing
 
-Pull Request와 Issue는 언제나 환영합니다!
+Pull requests and issues are always welcome!
 
-## 📜 라이선스
+## 📜 License
 
 [MIT](LICENSE) © 2026 workromancer
