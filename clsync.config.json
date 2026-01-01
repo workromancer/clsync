@@ -15,7 +15,7 @@
     }
   ],
   "output": {
-    "directory": "./.claude/clsync",
+    "directory": "~/.clsync/docs",
     "preserveStructure": false
   },
   "options": {

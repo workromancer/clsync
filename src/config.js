@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
+import os from 'os';
 
 const CONFIG_FILENAMES = [
   'clsync.config.json',
@@ -36,10 +37,13 @@ const CONFIG_FILENAMES = [
  * @property {Options} options - Runtime options
  */
 
+// Default output directory: ~/.clsync/docs
+const CLSYNC_DOCS_DIR = join(os.homedir(), '.clsync', 'docs');
+
 const defaultConfig = {
   sources: [],
   output: {
-    directory: './.claude/clsync',
+    directory: CLSYNC_DOCS_DIR,
     preserveStructure: true
   },
   options: {

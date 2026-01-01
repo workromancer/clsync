@@ -1,5 +1,6 @@
 import { mkdir, writeFile, stat } from 'fs/promises';
 import { dirname, join, resolve, basename } from 'path';
+import os from 'os';
 import chalk from 'chalk';
 import ora from 'ora';
 import {
@@ -10,6 +11,21 @@ import {
   isWithinPaths
 } from './github.js';
 import { fetchFromUrl } from './fetcher.js';
+
+/**
+ * Expand ~ to home directory
+ * @param {string} filepath
+ * @returns {string}
+ */
+function expandHome(filepath) {
+  if (filepath.startsWith('~/')) {
+    return join(os.homedir(), filepath.slice(2));
+  }
+  if (filepath === '~') {
+    return os.homedir();
+  }
+  return filepath;
+}
 
 /**
  * Add YAML frontmatter to markdown content
@@ -71,7 +87,8 @@ export async function trackDocs(config, options = {}) {
   const { sources, output } = config;
   const verbose = config.options.verbose;
 
-  const outputDir = resolve(process.cwd(), output.directory);
+  // Expand ~ to home directory and resolve path
+  const outputDir = resolve(process.cwd(), expandHome(output.directory));
 
   if (verbose) {
     console.log(chalk.gray(`Output directory: ${outputDir}`));

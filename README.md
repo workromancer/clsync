@@ -26,14 +26,254 @@
    ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝
 ```
 
+## Table of Contents
+
+- [Features](#-features)
+- [Installation](#-installation)
+- [Quick Start](#-quick-start)
+- [CLI Reference](#-cli-reference)
+- [Interactive Mode](#-interactive-mode)
+- [MCP Server](#-mcp-server)
+- [Architecture](#-architecture)
+- [Workflows](#-workflows)
+- [License](#-license)
+
+---
+
 ## ✨ Features
 
-- 🔄 **GitHub Sync** - Share and sync Claude Code settings via GitHub
-- 📦 **Multi-Repo Support** - Pull from multiple repositories
-- 📤 **Stage & Apply** - Stage locally, apply anywhere
-- 🎯 **Skills, Agents, Output Styles** - Manage all Claude Code extensions
-- 🔀 **Promote / Demote** - Move settings between project and user scope
-- 📄 **clsync.json** - Repository metadata for identification
+### Core Features
+
+| Feature                       | Description                                                   |
+| ----------------------------- | ------------------------------------------------------------- |
+| 🔄 **GitHub Sync**            | Share and sync Claude Code settings via GitHub repositories   |
+| 📦 **Multi-Repo Support**     | Pull from multiple repositories and manage them independently |
+| 📤 **Stage & Apply**          | Stage settings locally, apply them anywhere                   |
+| 🎯 **Full Extension Support** | Manage Skills, Agents, and Output Styles                      |
+| 🔀 **Promote / Demote**       | Move settings between project and user scope                  |
+| 🔌 **MCP Integration**        | Native Claude Code integration via MCP Server                 |
+
+### CLI Features
+
+| Feature                   | Description                                                |
+| ------------------------- | ---------------------------------------------------------- |
+| 🖥️ **Interactive Mode**   | User-friendly menu when running `clsync` without arguments |
+| 📊 **Status Dashboard**   | View staging area status and pulled repositories           |
+| 🔍 **Repository Browser** | Browse GitHub repositories before pulling                  |
+| 📋 **Scope Comparison**   | Compare user and project settings side-by-side             |
+| 💡 **Smart Hints**        | Helpful error messages with suggestions                    |
+| 📐 **Responsive UI**      | Adapts to terminal window size                             |
+
+### MCP Server Features
+
+| Feature                   | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| 📝 **Create Settings**    | Create skills, subagents, output styles via AI |
+| 📖 **Read Settings**      | Read and list existing settings                |
+| 🔄 **Sync Operations**    | Pull, apply, promote, demote via MCP tools     |
+| 📚 **Documentation Sync** | Sync external documentation to Claude context  |
+
+---
+
+## 📦 Installation
+
+```bash
+npm install -g clsync
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Initialize
+
+```bash
+clsync init
+```
+
+### 2. Pull Community Settings
+
+```bash
+# Browse a repository
+clsync browse owner/repo
+
+# Pull to local cache
+clsync pull owner/repo
+
+# Apply all to your ~/.claude
+clsync apply --all -s owner/repo -u
+```
+
+### 3. Share Your Settings
+
+```bash
+# Stage your settings
+clsync stage --all -u
+
+# Export with metadata
+clsync export ./my-settings -a "Your Name" -d "My Claude settings"
+
+# Push to GitHub
+cd my-settings && git init && git add . && git push
+```
+
+---
+
+## 📖 CLI Reference
+
+### Basic Commands
+
+| Command            | Description                      |
+| ------------------ | -------------------------------- |
+| `clsync`           | Start interactive mode           |
+| `clsync init`      | Initialize `~/.clsync` directory |
+| `clsync status`    | Show staging area status         |
+| `clsync --help`    | Show help with ASCII banner      |
+| `clsync --version` | Show version                     |
+
+### Staging Commands
+
+| Command                 | Description                     |
+| ----------------------- | ------------------------------- |
+| `clsync stage [name]`   | Stage item to `~/.clsync/local` |
+| `clsync stage --all -u` | Stage all from `~/.claude`      |
+| `clsync stage --all -p` | Stage all from `.claude`        |
+| `clsync unstage <name>` | Remove from staging             |
+| `clsync list`           | List staged items               |
+
+### Apply Commands
+
+| Command                               | Description               |
+| ------------------------------------- | ------------------------- |
+| `clsync apply [name]`                 | Apply from local staging  |
+| `clsync apply [name] -s owner/repo`   | Apply from pulled repo    |
+| `clsync apply --all -s owner/repo -u` | Apply all to `~/.claude`  |
+| `clsync apply --all -s owner/repo -p` | Apply all to `.claude`    |
+| `clsync apply [name] -d /path`        | Apply to custom directory |
+
+### Repository Commands
+
+| Command                       | Description              |
+| ----------------------------- | ------------------------ |
+| `clsync pull <owner/repo>`    | Pull from GitHub         |
+| `clsync pull <owner/repo> -f` | Force overwrite          |
+| `clsync browse <owner/repo>`  | Browse repo contents     |
+| `clsync repos`                | List pulled repositories |
+| `clsync list <owner/repo>`    | List items in a repo     |
+
+### Scope Commands
+
+| Command                          | Description                       |
+| -------------------------------- | --------------------------------- |
+| `clsync scopes`                  | Compare user and project settings |
+| `clsync promote <name>`          | Move: `.claude` → `~/.claude`     |
+| `clsync promote <name> -f`       | Force overwrite                   |
+| `clsync promote <name> -r <new>` | Rename to avoid conflict          |
+| `clsync demote <name>`           | Move: `~/.claude` → `.claude`     |
+
+### Export Commands
+
+| Command                           | Description                 |
+| --------------------------------- | --------------------------- |
+| `clsync export <dir>`             | Export staging to directory |
+| `clsync export <dir> -a "Author"` | With author name            |
+| `clsync export <dir> -d "Desc"`   | With description            |
+
+### Sync Commands
+
+| Command          | Description                    |
+| ---------------- | ------------------------------ |
+| `clsync sync`    | Sync documentation from config |
+| `clsync sync -u` | Sync to user level             |
+| `clsync sync -f` | Force overwrite                |
+| `clsync sync -d` | Dry run (preview)              |
+
+---
+
+## 🎮 Interactive Mode
+
+Run `clsync` without arguments to enter interactive mode:
+
+```
+   ██████╗██╗     ███████╗██╗   ██╗███╗   ██╗ ██████╗
+  ██╔════╝██║     ██╔════╝╚██╗ ██╔╝████╗  ██║██╔════╝
+  ...
+  📦 Local: 0 items  |  🔗 Repos: 2
+
+? What would you like to do?
+  1) 📊 View status
+  2) 📦 Browse pulled repositories
+  3) 📥 Apply items from repo
+  4) 🔍 Pull new repository
+  5) 🔀 Compare scopes (user vs project)
+  6) ❓ Help
+  7) 👋 Exit
+```
+
+**Features:**
+
+- Browse and apply items with number selection
+- Multi-select items to apply
+- Pull new repositories interactively
+- Compare scopes visually
+
+---
+
+## 🔌 MCP Server
+
+### Setup
+
+```bash
+claude mcp add clsync --transport stdio -- npx -y clsync-mcp
+```
+
+### Available Tools
+
+#### Documentation Tools
+
+| Tool        | Description                                |
+| ----------- | ------------------------------------------ |
+| `sync_docs` | Sync documentation from configured sources |
+| `list_docs` | List synced documentation files            |
+| `read_doc`  | Read a documentation file                  |
+
+#### Creation Tools
+
+| Tool                  | Description                      |
+| --------------------- | -------------------------------- |
+| `create_skill`        | Create a new skill with SKILL.md |
+| `create_subagent`     | Create a new subagent            |
+| `create_output_style` | Create a new output style        |
+
+#### List & Read Tools
+
+| Tool                 | Description                     |
+| -------------------- | ------------------------------- |
+| `list_skills`        | List skills (user/project/both) |
+| `read_skill`         | Read skill content              |
+| `list_subagents`     | List subagents                  |
+| `read_subagent`      | Read subagent content           |
+| `list_output_styles` | List output styles              |
+
+#### Repository Tools
+
+| Tool            | Description                 |
+| --------------- | --------------------------- |
+| `pull_settings` | Pull from GitHub repository |
+| `browse_repo`   | Browse repository contents  |
+| `apply_setting` | Apply setting from staging  |
+| `list_staged`   | List staged items           |
+| `list_repos`    | List pulled repositories    |
+
+#### Scope Tools
+
+| Tool              | Description                       |
+| ----------------- | --------------------------------- |
+| `promote_setting` | Move project → user               |
+| `demote_setting`  | Move user → project               |
+| `compare_scopes`  | Compare user and project settings |
+
+---
 
 ## 📐 Architecture
 
@@ -48,135 +288,29 @@
   └── ...           ─┘◄── apply ────┘
 ```
 
-## 📦 Installation
-
-```bash
-npm install -g clsync
-```
-
-## 🚀 Quick Start
-
-### Create a clsync Repository
-
-```bash
-# 1. Initialize
-clsync init
-
-# 2. Stage your settings
-clsync stage --all -u              # From ~/.claude
-
-# 3. Export with metadata
-clsync export ./my-settings \
-  -a "Your Name" \
-  -d "My Claude Code settings"
-
-# 4. Push to GitHub
-cd my-settings
-git init && git add . && git commit -m "Claude settings"
-git remote add origin git@github.com:user/my-settings.git
-git push -u origin main
-```
-
-### Use Someone's Repository
-
-```bash
-# Browse contents
-clsync browse owner/repo
-
-# Pull to local cache
-clsync pull owner/repo
-
-# Apply to your ~/.claude
-clsync apply --all -s owner/repo -u
-
-# Or apply to a project
-clsync apply --all -s owner/repo -d /path/to/.claude
-```
-
-## 📖 CLI Commands
-
-| Command                 | Description                                |
-| ----------------------- | ------------------------------------------ |
-| `clsync init`           | Initialize `~/.clsync`                     |
-| `clsync status`         | Show staging status                        |
-| `clsync stage [name]`   | Stage to `~/.clsync/local`                 |
-| `clsync apply [name]`   | Apply from staging                         |
-| `clsync unstage <name>` | Remove from staging                        |
-| `clsync pull <repo>`    | Pull GitHub → `~/.clsync/repos/`           |
-| `clsync browse <repo>`  | Browse repo with metadata                  |
-| `clsync list [source]`  | List items (local or repo)                 |
-| `clsync repos`          | List pulled repositories                   |
-| `clsync export <dir>`   | Export with `clsync.json`                  |
-| `clsync promote <name>` | Move from `.claude` → `~/.claude`          |
-| `clsync demote <name>`  | Move from `~/.claude` → `.claude`          |
-| `clsync scopes`         | Compare user and project settings          |
-| `clsync sync`           | Sync documentation from configured sources |
-
-### Stage Options
-
-```bash
-clsync stage [name] [options]
-  -u, --user     From ~/.claude (default)
-  -p, --project  From .claude
-  -a, --all      Stage all
-```
-
-### Apply Options
-
-```bash
-clsync apply [name] [options]
-  -u, --user        To ~/.claude (default)
-  -p, --project     To .claude
-  -d, --dir <path>  To custom directory
-  -s, --source <repo>  From repo (default: local)
-  -a, --all         Apply all
-```
-
-### Promote / Demote Options
-
-```bash
-clsync promote <name> [options]
-  -f, --force            Overwrite if exists
-  -r, --rename <newname> Rename to avoid conflict
-
-clsync demote <name> [options]
-  -f, --force            Overwrite if exists
-  -r, --rename <newname> Rename to avoid conflict
-```
-
-### Export Options
-
-```bash
-clsync export <dir> [options]
-  -a, --author <name>  Author name
-  -d, --desc <text>    Description
-```
-
-## 📁 Directory Structure
-
-### ~/.clsync (Staging Area)
+### Directory Structure
 
 ```
 ~/.clsync/
-├── manifest.json
-├── local/                 # Your staged items
+├── manifest.json           # Metadata and repo tracking
+├── local/                  # Your staged items
 │   ├── skills/
 │   ├── agents/
 │   └── output-styles/
-└── repos/                 # Pulled repositories
+└── repos/                  # Pulled repositories
     ├── owner1/repo1/
-    │   ├── clsync.json    # Repo metadata
+    │   ├── clsync.json     # Repo metadata
     │   ├── skills/
     │   └── agents/
     └── owner2/repo2/
 ```
 
-### clsync.json (Repository Metadata)
+### clsync.json Schema
 
 ```json
 {
   "$schema": "https://clsync.dev/schema/v1.json",
-  "version": "1.0.0",
+  "version": "0.1.0-beta",
   "name": "my-settings",
   "description": "My Claude Code settings",
   "author": "username",
@@ -194,94 +328,62 @@ clsync export <dir> [options]
 }
 ```
 
+---
+
 ## 🎯 Workflows
 
-### 1. Share Your Settings
+### Personal: Sync Across Machines
+
+**Machine A (export):**
 
 ```bash
-clsync init
 clsync stage --all -u
-clsync export ./my-settings -a "Me" -d "My settings"
-cd my-settings && git init && git push
+clsync export ./my-settings -a "Me"
+cd my-settings && git push
 ```
 
-### 2. Use Multiple Repos
+**Machine B (import):**
 
 ```bash
-clsync pull user1/skills
-clsync pull user2/agents
-clsync repos                        # View all
-clsync apply --all -s user1/skills -u
+clsync pull user/my-settings
+clsync apply --all -s user/my-settings -u
 ```
 
-### 3. Apply to Multiple Projects
+### Team: Share Settings
 
 ```bash
-clsync pull team/shared-settings
-clsync apply --all -s team/shared-settings -d ~/project1/.claude
-clsync apply --all -s team/shared-settings -d ~/project2/.claude
+# Team lead exports
+clsync stage --all -u
+clsync export ./team-settings -a "Team" -d "Shared team settings"
+
+# Team members import
+clsync pull team/settings
+clsync apply --all -s team/settings -u
 ```
 
-### 4. Sync Across Machines
-
-**Machine A:**
+### Community: Use Multiple Repos
 
 ```bash
-clsync stage --all -u && clsync export ./s && cd s && git push
+clsync pull user1/awesome-skills
+clsync pull user2/productivity-agents
+clsync repos                              # View all
+clsync apply code-reviewer -s user2/productivity-agents -u
 ```
 
-**Machine B:**
+### Project: Manage Scopes
 
 ```bash
-clsync pull user/settings && clsync apply --all -s user/settings -u
-```
-
-### 5. Manage Scope (Promote / Demote)
-
-```bash
-# View settings in both scopes
+# View both scopes
 clsync scopes
 
-# Move project setting to user (make global)
+# Promote project setting to user (make global)
 clsync promote my-skill
 
-# Move user setting to project (make local)
-clsync demote my-skill
-
-# Handle conflicts
-clsync promote my-skill --force        # Overwrite
-clsync promote my-skill --rename new-name  # Rename
+# Demote user setting to project (make local)
+clsync demote my-agent
 ```
 
-## 🔌 MCP Server
-
-```bash
-claude mcp add clsync --transport stdio -- npx -y clsync-mcp
-```
-
-### Available Tools
-
-| Tool                  | Description                            |
-| --------------------- | -------------------------------------- |
-| `sync_docs`           | Sync documentation                     |
-| `list_docs`           | List synced documentation              |
-| `read_doc`            | Read documentation file                |
-| `create_skill`        | Create skill                           |
-| `list_skills`         | List skills (user/project/both)        |
-| `read_skill`          | Read skill content                     |
-| `create_subagent`     | Create subagent                        |
-| `list_subagents`      | List subagents (user/project/both)     |
-| `read_subagent`       | Read subagent content                  |
-| `create_output_style` | Create output style                    |
-| `list_output_styles`  | List output styles (user/project/both) |
-| `pull_settings`       | Pull from GitHub                       |
-| `browse_repo`         | Browse repository                      |
-| `apply_setting`       | Apply setting from staging             |
-| `list_staged`         | List staged items                      |
-| `list_repos`          | List pulled repositories               |
-| `promote_setting`     | Move project → user                    |
-| `demote_setting`      | Move user → project                    |
-| `compare_scopes`      | Compare user and project settings      |
+---
 
 ## 🤝 Contributing
 

@@ -905,8 +905,8 @@ program
   .command("sync")
   .description("Sync documentation from configured sources")
   .option("-c, --config <path>", "Config file", "clsync.config.json")
-  .option("-u, --user", "Save to ~/.claude/clsync")
-  .option("-p, --project", "Save to .claude/clsync")
+  .option("-u, --user", "Save to ~/.clsync/docs (default)")
+  .option("-p, --project", "Save to .clsync (project local)")
   .option("-v, --verbose", "Verbose")
   .option("-d, --dry-run", "Preview")
   .option("-f, --force", "Overwrite")
@@ -914,13 +914,15 @@ program
     try {
       
       const config = await loadConfig(options.config);
-      const scope = options.project ? "project" : "user";
       
-      config.output.directory = options.project 
-        ? "./.claude/clsync" 
-        : join(os.homedir(), ".claude", "clsync");
-      
-      console.log(chalk.dim(`  📁 Scope: ${scope === 'project' ? '.claude' : '~/.claude'}\n`));
+      // Default: ~/.clsync/docs, with -p option: .clsync
+      if (options.project) {
+        config.output.directory = ".clsync";
+        console.log(chalk.dim(`  📁 Scope: .clsync (project)\n`));
+      } else {
+        config.output.directory = join(os.homedir(), ".clsync", "docs");
+        console.log(chalk.dim(`  📁 Scope: ~/.clsync/docs\n`));
+      }
       
       if (options.verbose) config.options.verbose = true;
       if (options.force) config.options.overwrite = true;

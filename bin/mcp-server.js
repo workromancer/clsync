@@ -25,9 +25,9 @@ const server = new McpServer({
 
 function getDocsDir(scope = "user") {
   if (scope === "project") {
-    return resolve(process.cwd(), ".claude", "clsync");
+    return resolve(process.cwd(), ".clsync");
   }
-  return join(os.homedir(), ".claude", "clsync");
+  return join(os.homedir(), ".clsync", "docs");
 }
 
 function getClaudeDir(scope = "user") {
@@ -113,11 +113,11 @@ async function listItems(dir, type = "file") {
 
 server.tool(
   "sync_docs",
-  "Sync documentation from configured sources. Updates local copies of Claude Code docs.",
+  "Sync documentation from configured sources. Downloads Claude Code docs to ~/.clsync/docs for reference when creating skills, subagents, and output styles.",
   {
     scope: {
       type: "string",
-      description: 'Where to save docs: "user" (~/.claude/clsync) or "project" (.claude/clsync)',
+      description: 'Where to save docs: "user" (~/.clsync/docs) or "project" (.clsync)',
       enum: ["user", "project"],
     },
     force: {
@@ -231,7 +231,9 @@ server.tool(
 
 server.tool(
   "create_skill",
-  "Create a new Claude Code skill. Skills teach Claude specific capabilities.",
+  `Create a new Claude Code skill. Skills teach Claude specific capabilities.
+
+📚 IMPORTANT: Before creating a skill, refer to the documentation at ~/.clsync/docs/claude-code/skills.md for the correct format and best practices. Use the read_doc tool to read it first.`,
   {
     name: { type: "string", description: "Skill name (e.g., code-reviewer, commit-messages)" },
     description: { type: "string", description: "Short description of what the skill does" },
@@ -375,7 +377,9 @@ server.tool(
 
 server.tool(
   "create_subagent",
-  "Create a new Claude Code subagent. Subagents are specialized agents for specific tasks.",
+  `Create a new Claude Code subagent. Subagents are specialized agents for specific tasks.
+
+📚 IMPORTANT: Before creating a subagent, refer to the documentation at ~/.clsync/docs/claude-code/sub-agents.md for the correct format and best practices. Use the read_doc tool to read it first.`,
   {
     name: { type: "string", description: "Subagent name (e.g., test-runner, security-reviewer)" },
     description: { type: "string", description: "What this subagent specializes in" },
@@ -527,7 +531,9 @@ server.tool(
 
 server.tool(
   "create_output_style",
-  "Create a new output style for Claude's responses.",
+  `Create a new output style for Claude's responses.
+
+📚 IMPORTANT: Before creating an output style, refer to the documentation at ~/.clsync/docs/claude-code/output-styles.md for the correct format and best practices. Use the read_doc tool to read it first.`,
   {
     name: { type: "string", description: "Style name (e.g., concise, detailed, korean)" },
     description: { type: "string", description: "What this style does" },
