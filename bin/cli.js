@@ -24,32 +24,40 @@ import {
   listRepoItems,
   promoteItem,
   demoteItem,
-  listBothScopes,
-  listProjectClsync,
-  loadFromProjectClsync,
-  loadAllFromProjectClsync
+  listBothScopes
 } from "../src/repo-sync.js";
 
-// Banner
-const smallBanner = `
-${chalk.cyan.bold('  ┌───────────────────────────────────────┐')}
-${chalk.cyan.bold('  │')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v1.0.0')}                       ${chalk.cyan.bold('│')}
-${chalk.cyan.bold('  │')}  ${chalk.dim('Claude Code Environment Sync')}        ${chalk.cyan.bold('│')}
-${chalk.cyan.bold('  └───────────────────────────────────────┘')}
+// ASCII Art Banner - Cool cyberpunk style
+const banner = `
+${chalk.cyan('   ██████╗██╗     ███████╗██╗   ██╗███╗   ██╗ ██████╗')}
+${chalk.cyan('  ██╔════╝██║     ██╔════╝╚██╗ ██╔╝████╗  ██║██╔════╝')}
+${chalk.cyan('  ██║     ██║     ███████╗ ╚████╔╝ ██╔██╗ ██║██║     ')}
+${chalk.cyan('  ██║     ██║     ╚════██║  ╚██╔╝  ██║╚██╗██║██║     ')}
+${chalk.cyan('  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗')}
+${chalk.cyan('   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝')}
+${chalk.dim('  ───────────────────────────────────────────────────')}
+${chalk.dim('   Claude Code Environment Sync')}              ${chalk.cyan('v1.0.0')}
 `;
 
-function showBanner() { console.log(smallBanner); }
+function showBanner() { 
+  console.log(banner); 
+}
 
 function showSuccess(msg = 'Complete!') {
   console.log(`
-${chalk.green.bold('  ┌───────────────────────────────────────┐')}
-${chalk.green.bold('  │')}  ${chalk.white('✓')} ${chalk.green.bold(msg.padEnd(33))}${chalk.green.bold('│')}
-${chalk.green.bold('  └───────────────────────────────────────┘')}
+${chalk.green('  ╔═══════════════════════════════════════════╗')}
+${chalk.green('  ║')}  ${chalk.white('✓')} ${chalk.green.bold(msg.padEnd(38))}${chalk.green('║')}
+${chalk.green('  ╚═══════════════════════════════════════════╝')}
 `);
 }
 
 function showError(msg) {
-  console.log(`\n${chalk.red('  ✗ Error:')} ${msg}\n`);
+  console.log(`
+${chalk.red('  ╔═══════════════════════════════════════════╗')}
+${chalk.red('  ║')}  ${chalk.white('✗')} ${chalk.red('Error')}                                  ${chalk.red('║')}
+${chalk.red('  ╚═══════════════════════════════════════════╝')}
+${chalk.dim('  ' + msg)}
+`);
 }
 
 // Main program
