@@ -365,7 +365,14 @@ export async function pullFromGitHub(repoUrl, options = {}) {
   );
   
   if (settingsFiles.length === 0) {
-    throw new Error('No settings found in repository');
+    throw new Error(
+      `No clsync settings found in repository.\n\n` +
+      `This repository doesn't have the clsync directory structure:\n` +
+      `  - skills/\n` +
+      `  - agents/\n` +
+      `  - output-styles/\n\n` +
+      `Would you like to add clsync settings to this repository?`
+    );
   }
   
   const results = { downloaded: 0, skipped: 0, files: [], repoPath: `${owner}/${repo}` };

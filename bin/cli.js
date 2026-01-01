@@ -315,7 +315,12 @@ program
       }
       
       if (items.length === 0) {
-        console.log(chalk.dim('  No settings found.\n'));
+        console.log(chalk.yellow('  ⚠ No clsync settings found.\n'));
+        console.log(chalk.dim('  This repository doesn\'t have the clsync structure:'));
+        console.log(chalk.dim('    - skills/'));
+        console.log(chalk.dim('    - agents/'));
+        console.log(chalk.dim('    - output-styles/\n'));
+        console.log(chalk.dim('  Would you like to add clsync settings to this repository?\n'));
         return;
       }
       
