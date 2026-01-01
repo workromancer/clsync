@@ -9,6 +9,8 @@ import os from 'os';
 
 const SETTINGS_DIRS = ['skills', 'agents', 'output-styles'];
 const MANIFEST_FILE = 'clsync.manifest.json';
+const CLSYNC_DIR = join(os.homedir(), '.clsync');
+const LOCAL_MANIFEST = join(CLSYNC_DIR, 'manifest.json');
 
 /**
  * Parse GitHub repository URL or shorthand
@@ -35,6 +37,59 @@ function getClaudeDir(scope = 'user') {
     return join(process.cwd(), '.claude');
   }
   return join(os.homedir(), '.claude');
+}
+
+/**
+ * Load local manifest from ~/.clsync/manifest.json
+ */
+async function loadLocalManifest() {
+  try {
+    const content = await readFile(LOCAL_MANIFEST, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return { 
+      version: '1.0.0', 
+      installed: [],
+      repos: {}
+    };
+  }
+}
+
+/**
+ * Save local manifest to ~/.clsync/manifest.json
+ */
+async function saveLocalManifest(manifest) {
+  await mkdir(CLSYNC_DIR, { recursive: true });
+  await writeFile(LOCAL_MANIFEST, JSON.stringify(manifest, null, 2), 'utf-8');
+}
+
+/**
+ * Add installed item to local manifest
+ */
+async function trackInstallation(item, repoUrl, scope) {
+  const manifest = await loadLocalManifest();
+  
+  const entry = {
+    ...item,
+    installed_at: new Date().toISOString(),
+    source_repo: repoUrl,
+    scope
+  };
+
+  // Remove existing entry with same name and type
+  manifest.installed = manifest.installed.filter(
+    i => !(i.name === item.name && i.type === item.type && i.scope === scope)
+  );
+  
+  manifest.installed.push(entry);
+  
+  // Track repo
+  if (!manifest.repos[repoUrl]) {
+    manifest.repos[repoUrl] = { last_synced: new Date().toISOString() };
+  }
+  
+  await saveLocalManifest(manifest);
+  return entry;
 }
 
 /**
@@ -350,6 +405,9 @@ export async function installItem(repoUrl, itemName, options = {}) {
     results.files.push(file.path);
   }
 
+  // Track in local manifest
+  await trackInstallation(item, repoUrl, scope);
+
   results.item = item;
   return results;
 }
@@ -435,4 +493,20 @@ export async function copyItem(itemName, fromScope, toScope) {
 
   results.item = item;
   return results;
+}
+
+/**
+ * Get installed settings from ~/.clsync/manifest.json
+ */
+export async function getInstalledSettings() {
+  const manifest = await loadLocalManifest();
+  return manifest.installed;
+}
+
+/**
+ * Get tracked repos from ~/.clsync/manifest.json
+ */
+export async function getTrackedRepos() {
+  const manifest = await loadLocalManifest();
+  return manifest.repos;
 }

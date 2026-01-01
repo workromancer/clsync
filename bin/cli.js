@@ -346,4 +346,53 @@ program
     }
   });
 
+// Status: Show installation history from ~/.clsync
+program
+  .command("status")
+  .description("Show installation history from ~/.clsync")
+  .action(async () => {
+    try {
+      showBanner();
+      console.log(chalk.cyan('  📊 Installation History\n'));
+      console.log(chalk.dim(`  Data stored in: ~/.clsync/manifest.json\n`));
+
+      const { getInstalledSettings, getTrackedRepos } = await import("../src/repo-sync.js");
+      
+      const installed = await getInstalledSettings();
+      const repos = await getTrackedRepos();
+
+      if (Object.keys(repos).length > 0) {
+        console.log(chalk.white.bold('  📦 Tracked Repositories'));
+        for (const [repo, info] of Object.entries(repos)) {
+          console.log(chalk.dim(`     - ${repo}`));
+          console.log(chalk.dim(`       Last synced: ${info.last_synced}`));
+        }
+        console.log();
+      }
+
+      if (installed.length === 0) {
+        console.log(chalk.dim('  No items installed yet.\n'));
+        console.log(chalk.dim('  Use:'));
+        console.log(chalk.dim('    clsync browse <repo>   - Browse available settings'));
+        console.log(chalk.dim('    clsync install <repo> <name> - Install specific item\n'));
+        return;
+      }
+
+      console.log(chalk.white.bold('  🎯 Installed Items'));
+      for (const item of installed) {
+        const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+        console.log(chalk.dim(`     ${icon} ${item.name} (${item.type})`));
+        console.log(chalk.dim(`        From: ${item.source_repo}`));
+        console.log(chalk.dim(`        Scope: ${item.scope}`));
+        console.log(chalk.dim(`        Installed: ${item.installed_at}`));
+      }
+      console.log();
+
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
 program.parse();
+
