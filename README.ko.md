@@ -17,12 +17,22 @@
 
 ---
 
+```
+   ██████╗██╗     ███████╗██╗   ██╗███╗   ██╗ ██████╗
+  ██╔════╝██║     ██╔════╝╚██╗ ██╔╝████╗  ██║██╔════╝
+  ██║     ██║     ███████╗ ╚████╔╝ ██╔██╗ ██║██║
+  ██║     ██║     ╚════██║  ╚██╔╝  ██║╚██╗██║██║
+  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗
+   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝
+```
+
 ## ✨ 주요 기능
 
 - 🔄 **GitHub 동기화** - GitHub을 통해 Claude Code 설정 공유
 - 📦 **멀티 리포 지원** - 여러 리포지토리에서 풀 가능
 - 📤 **Stage & Apply** - 로컬에서 스테이지, 어디든 적용
 - 🎯 **Skills, Agents, Output Styles** - 모든 Claude Code 확장 관리
+- 🔀 **Promote / Demote** - 프로젝트와 사용자 스코프 간 설정 이동
 - 📄 **clsync.json** - 리포지토리 식별용 메타데이터
 
 ## 📐 아키텍처
@@ -85,18 +95,22 @@ clsync apply --all -s owner/repo -d /path/to/.claude
 
 ## 📖 CLI 명령어
 
-| 명령어                  | 설명                          |
-| ----------------------- | ----------------------------- |
-| `clsync init`           | `~/.clsync` 초기화            |
-| `clsync status`         | 스테이징 상태                 |
-| `clsync stage [name]`   | `~/.clsync/local`로 스테이지  |
-| `clsync apply [name]`   | 스테이징에서 적용             |
-| `clsync unstage <name>` | 스테이징에서 제거             |
-| `clsync pull <repo>`    | GitHub → `~/.clsync/repos/`   |
-| `clsync browse <repo>`  | 메타데이터와 함께 탐색        |
-| `clsync list [source]`  | 항목 목록 (local 또는 repo)   |
-| `clsync repos`          | 풀한 리포지토리 목록          |
-| `clsync export <dir>`   | `clsync.json`과 함께 내보내기 |
+| 명령어                  | 설명                           |
+| ----------------------- | ------------------------------ |
+| `clsync init`           | `~/.clsync` 초기화             |
+| `clsync status`         | 스테이징 상태                  |
+| `clsync stage [name]`   | `~/.clsync/local`로 스테이지   |
+| `clsync apply [name]`   | 스테이징에서 적용              |
+| `clsync unstage <name>` | 스테이징에서 제거              |
+| `clsync pull <repo>`    | GitHub → `~/.clsync/repos/`    |
+| `clsync browse <repo>`  | 메타데이터와 함께 탐색         |
+| `clsync list [source]`  | 항목 목록 (local 또는 repo)    |
+| `clsync repos`          | 풀한 리포지토리 목록           |
+| `clsync export <dir>`   | `clsync.json`과 함께 내보내기  |
+| `clsync promote <name>` | `.claude` → `~/.claude`로 이동 |
+| `clsync demote <name>`  | `~/.claude` → `.claude`로 이동 |
+| `clsync scopes`         | 사용자/프로젝트 설정 비교      |
+| `clsync sync`           | 설정된 소스에서 문서 동기화    |
 
 ### Stage 옵션
 
@@ -116,6 +130,18 @@ clsync apply [name] [options]
   -d, --dir <path>  커스텀 디렉터리로
   -s, --source <repo>  리포에서 (기본: local)
   -a, --all         모두 적용
+```
+
+### Promote / Demote 옵션
+
+```bash
+clsync promote <name> [options]
+  -f, --force            기존 항목 덮어쓰기
+  -r, --rename <newname> 충돌 방지를 위해 이름 변경
+
+clsync demote <name> [options]
+  -f, --force            기존 항목 덮어쓰기
+  -r, --rename <newname> 충돌 방지를 위해 이름 변경
 ```
 
 ### Export 옵션
@@ -210,6 +236,23 @@ clsync stage --all -u && clsync export ./s && cd s && git push
 clsync pull user/settings && clsync apply --all -s user/settings -u
 ```
 
+### 5. 스코프 관리 (Promote / Demote)
+
+```bash
+# 양쪽 스코프의 설정 확인
+clsync scopes
+
+# 프로젝트 설정을 사용자로 이동 (글로벌화)
+clsync promote my-skill
+
+# 사용자 설정을 프로젝트로 이동 (로컬화)
+clsync demote my-skill
+
+# 충돌 처리
+clsync promote my-skill --force           # 덮어쓰기
+clsync promote my-skill --rename new-name # 이름 변경
+```
+
 ## 🔌 MCP 서버
 
 ```bash
@@ -218,14 +261,27 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 
 ### 사용 가능한 도구
 
-| 도구                  | 설명              |
-| --------------------- | ----------------- |
-| `sync_docs`           | 문서 동기화       |
-| `create_skill`        | 스킬 생성         |
-| `create_subagent`     | 서브에이전트 생성 |
-| `create_output_style` | 출력 스타일 생성  |
-| `pull_settings`       | GitHub에서 풀     |
-| `browse_repo`         | 리포지토리 탐색   |
+| 도구                  | 설명                                  |
+| --------------------- | ------------------------------------- |
+| `sync_docs`           | 문서 동기화                           |
+| `list_docs`           | 동기화된 문서 목록                    |
+| `read_doc`            | 문서 파일 읽기                        |
+| `create_skill`        | 스킬 생성                             |
+| `list_skills`         | 스킬 목록 (user/project/both)         |
+| `read_skill`          | 스킬 내용 읽기                        |
+| `create_subagent`     | 서브에이전트 생성                     |
+| `list_subagents`      | 서브에이전트 목록 (user/project/both) |
+| `read_subagent`       | 서브에이전트 내용 읽기                |
+| `create_output_style` | 출력 스타일 생성                      |
+| `list_output_styles`  | 출력 스타일 목록 (user/project/both)  |
+| `pull_settings`       | GitHub에서 풀                         |
+| `browse_repo`         | 리포지토리 탐색                       |
+| `apply_setting`       | 스테이징에서 설정 적용                |
+| `list_staged`         | 스테이지된 항목 목록                  |
+| `list_repos`          | 풀한 리포지토리 목록                  |
+| `promote_setting`     | 프로젝트 → 사용자 이동                |
+| `demote_setting`      | 사용자 → 프로젝트 이동                |
+| `compare_scopes`      | 사용자/프로젝트 설정 비교             |
 
 ## 🤝 기여
 
