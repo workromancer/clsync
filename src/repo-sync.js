@@ -361,7 +361,7 @@ export async function pullFromGitHub(repoUrl, options = {}) {
   
   const tree = await fetchRepoTree(owner, repo, branch);
   const settingsFiles = tree.filter(f => 
-    f.type === 'blob' && SETTINGS_DIRS.some(d => f.path.startsWith(d + '/'))
+    f && f.path && f.type === 'blob' && SETTINGS_DIRS.some(d => f.path.startsWith(d + '/'))
   );
   
   if (settingsFiles.length === 0) {
