@@ -410,6 +410,7 @@ export async function browseRepo(repoUrl) {
   
   // First pass: find skill directories (those with SKILL.md)
   for (const file of tree) {
+    if (!file || !file.path) continue;
     if (file.type === 'blob' && file.path.match(/^skills\/[^/]+\/SKILL\.md$/)) {
       const skillName = file.path.split('/')[1];
       skillDirs.add(skillName);
@@ -423,6 +424,7 @@ export async function browseRepo(repoUrl) {
   
   // Find agents and output-styles
   for (const file of tree) {
+    if (!file || !file.path) continue;
     if (file.type !== 'blob') continue;
     
     if (file.path.startsWith('agents/') && file.path.endsWith('.md')) {
