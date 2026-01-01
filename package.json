@@ -1,0 +1,38 @@
+{
+  "name": "cc-syncer",
+  "version": "1.0.0",
+  "description": "Sync Claude Code environment across multiple machines - docs, skills, subagents, and more",
+  "main": "src/index.js",
+  "bin": {
+    "cc-syncer": "./bin/cli.js",
+    "cc-syncer-mcp": "./bin/mcp-server.js"
+  },
+  "scripts": {
+    "start": "node bin/cli.js",
+    "mcp": "node bin/mcp-server.js",
+    "test": "node --test src/**/*.test.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "sync",
+    "skills",
+    "subagents",
+    "mcp",
+    "model-context-protocol",
+    "environment",
+    "dotfiles"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "ora": "^8.0.1"
+  }
+}
