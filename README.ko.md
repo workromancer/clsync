@@ -310,7 +310,7 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```json
 {
   "$schema": "https://clsync.dev/schema/v1.json",
-  "version": "0.1.0-beta",
+  "version": "0.2.0",
   "name": "my-settings",
   "description": "My Claude Code settings",
   "author": "username",
