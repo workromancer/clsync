@@ -235,11 +235,11 @@ server.registerTool(
       name: z.string().describe("Skill name (e.g., code-reviewer, commit-messages)"),
       description: z.string().describe("Short description of what the skill does"),
       instructions: z.string().describe("Markdown instructions for Claude to follow"),
-      scope: z.enum(["user", "project"]).optional().describe('"user" (~/.claude/skills) or "project" (.claude/skills)'),
+      scope: z.enum(["user", "project"]).optional().describe('"project" (.claude/skills) or "user" (~/.claude/skills). Default: project'),
       allowed_tools: z.array(z.string()).optional().describe("Optional list of allowed tools (e.g., Bash, Read, Write)"),
     },
   },
-  async ({ name, description, instructions, scope = "user", allowed_tools }) => {
+  async ({ name, description, instructions, scope = "project", allowed_tools }) => {
     // Validate required parameters
     if (!name) {
       return {
@@ -383,12 +383,12 @@ server.registerTool(
       name: z.string().describe("Subagent name (e.g., test-runner, security-reviewer)"),
       description: z.string().describe("What this subagent specializes in"),
       instructions: z.string().describe("System prompt / instructions for the subagent"),
-      scope: z.enum(["user", "project"]).optional().describe('"user" (~/.claude/agents) or "project" (.claude/agents)'),
+      scope: z.enum(["user", "project"]).optional().describe('"project" (.claude/agents) or "user" (~/.claude/agents). Default: project'),
       skills: z.array(z.string()).optional().describe("Optional list of skills this subagent can use"),
       allowed_tools: z.array(z.string()).optional().describe("Optional list of allowed tools"),
     },
   },
-  async ({ name, description, instructions, scope = "user", skills, allowed_tools }) => {
+  async ({ name, description, instructions, scope = "project", skills, allowed_tools }) => {
     const agentsDir = getAgentsDir(scope);
     const agentFile = join(agentsDir, `${name}.md`);
 
