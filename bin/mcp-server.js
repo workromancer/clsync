@@ -16,7 +16,7 @@ import { trackDocs } from "../src/index.js";
 // Create MCP server
 const server = new McpServer({
   name: "clsync",
-  version: "1.0.0",
+  version: "0.1.0-beta",
 });
 
 // =============================================================================

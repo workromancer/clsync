@@ -1,6 +1,6 @@
 {
   "name": "clsync",
-  "version": "1.0.0",
+  "version": "0.1.0-beta",
   "description": "Sync Claude Code environment across multiple machines - docs, skills, subagents, and more",
   "main": "src/index.js",
   "bin": {
