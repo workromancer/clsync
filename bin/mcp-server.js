@@ -10,6 +10,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { readFile, readdir, stat, mkdir, writeFile } from "fs/promises";
 import { join, resolve } from "path";
 import os from "os";
+import { z } from "zod";
 import { loadConfig } from "../src/config.js";
 import { trackDocs } from "../src/index.js";
 
@@ -111,18 +112,13 @@ async function listItems(dir, type = "file") {
 // Documentation Tools
 // =============================================================================
 
-server.tool(
+server.registerTool(
   "sync_docs",
-  "Sync documentation from configured sources. Downloads Claude Code docs to ~/.clsync/docs for reference when creating skills, subagents, and output styles.",
   {
-    scope: {
-      type: "string",
-      description: 'Where to save docs: "user" (~/.clsync/docs) or "project" (.clsync)',
-      enum: ["user", "project"],
-    },
-    force: {
-      type: "boolean",
-      description: "Force overwrite existing files",
+    description: "Sync documentation from configured sources. Downloads Claude Code docs to ~/.clsync/docs for reference when creating skills, subagents, and output styles.",
+    inputSchema: {
+      scope: z.enum(["user", "project"]).optional().describe('Where to save docs: "user" (~/.clsync/docs) or "project" (.clsync)'),
+      force: z.boolean().optional().describe("Force overwrite existing files"),
     },
   },
   async ({ scope = "user", force = false }) => {
@@ -176,14 +172,12 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "list_docs",
-  "List all synced documentation files",
   {
-    scope: {
-      type: "string",
-      description: 'Scope: "user" or "project"',
-      enum: ["user", "project"],
+    description: "List all synced documentation files",
+    inputSchema: {
+      scope: z.enum(["user", "project"]).optional().describe('Scope: "user" or "project"'),
     },
   },
   async ({ scope = "user" }) => {
@@ -202,13 +196,15 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "read_doc",
-  "Read the contents of a synced documentation file",
   {
-    source: { type: "string", description: 'Source name (e.g., "claude-code")' },
-    file: { type: "string", description: 'File name (e.g., "skills.md")' },
-    scope: { type: "string", description: 'Scope: "user" or "project"', enum: ["user", "project"] },
+    description: "Read the contents of a synced documentation file",
+    inputSchema: {
+      source: z.string().describe('Source name (e.g., "claude-code")'),
+      file: z.string().describe('File name (e.g., "skills.md")'),
+      scope: z.enum(["user", "project"]).optional().describe('Scope: "user" or "project"'),
+    },
   },
   async ({ source, file, scope = "user" }) => {
     const filePath = join(getDocsDir(scope), source, file);
@@ -229,20 +225,18 @@ server.tool(
 // Skill Tools
 // =============================================================================
 
-server.tool(
+server.registerTool(
   "create_skill",
-  `Create a new Claude Code skill. Skills teach Claude specific capabilities.
+  {
+    description: `Create a new Claude Code skill. Skills teach Claude specific capabilities.
 
 📚 IMPORTANT: Before creating a skill, refer to the documentation at ~/.clsync/docs/claude-code/skills.md for the correct format and best practices. Use the read_doc tool to read it first.`,
-  {
-    name: { type: "string", description: "Skill name (e.g., code-reviewer, commit-messages)" },
-    description: { type: "string", description: "Short description of what the skill does" },
-    instructions: { type: "string", description: "Markdown instructions for Claude to follow" },
-    scope: { type: "string", description: '"user" (~/.claude/skills) or "project" (.claude/skills)', enum: ["user", "project"] },
-    allowed_tools: {
-      type: "array",
-      items: { type: "string" },
-      description: "Optional list of allowed tools (e.g., Bash, Read, Write)",
+    inputSchema: {
+      name: z.string().describe("Skill name (e.g., code-reviewer, commit-messages)"),
+      description: z.string().describe("Short description of what the skill does"),
+      instructions: z.string().describe("Markdown instructions for Claude to follow"),
+      scope: z.enum(["user", "project"]).optional().describe('"user" (~/.claude/skills) or "project" (.claude/skills)'),
+      allowed_tools: z.array(z.string()).optional().describe("Optional list of allowed tools (e.g., Bash, Read, Write)"),
     },
   },
   async ({ name, description, instructions, scope = "user", allowed_tools }) => {
@@ -306,11 +300,13 @@ ${instructions}
   }
 );
 
-server.tool(
+server.registerTool(
   "list_skills",
-  "List all Claude Code skills in user and/or project scope",
   {
-    scope: { type: "string", description: '"user", "project", or "both" (default)', enum: ["user", "project", "both"] },
+    description: "List all Claude Code skills in user and/or project scope",
+    inputSchema: {
+      scope: z.enum(["user", "project", "both"]).optional().describe('"user", "project", or "both" (default)'),
+    },
   },
   async ({ scope = "both" }) => {
     let text = "🎯 Skills\n\n";
@@ -349,12 +345,14 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "read_skill",
-  "Read a skill's SKILL.md content",
   {
-    name: { type: "string", description: "Skill name" },
-    scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
+    description: "Read a skill's SKILL.md content",
+    inputSchema: {
+      name: z.string().describe("Skill name"),
+      scope: z.enum(["user", "project"]).optional().describe('"user" or "project"'),
+    },
   },
   async ({ name, scope = "user" }) => {
     const skillFile = join(getSkillsDir(scope), name, "SKILL.md");
@@ -375,48 +373,22 @@ server.tool(
 // Subagent Tools
 // =============================================================================
 
-server.tool(
+server.registerTool(
   "create_subagent",
-  `Create a new Claude Code subagent. Subagents are specialized agents for specific tasks.
+  {
+    description: `Create a new Claude Code subagent. Subagents are specialized agents for specific tasks.
 
 📚 IMPORTANT: Before creating a subagent, refer to the documentation at ~/.clsync/docs/claude-code/sub-agents.md for the correct format and best practices. Use the read_doc tool to read it first.`,
-  {
-    name: { type: "string", description: "Subagent name (e.g., test-runner, security-reviewer)" },
-    description: { type: "string", description: "What this subagent specializes in" },
-    instructions: { type: "string", description: "System prompt / instructions for the subagent" },
-    scope: { type: "string", description: '"user" (~/.claude/agents) or "project" (.claude/agents)', enum: ["user", "project"] },
-    skills: {
-      type: "array",
-      items: { type: "string" },
-      description: "Optional list of skills this subagent can use",
-    },
-    allowed_tools: {
-      type: "array",
-      items: { type: "string" },
-      description: "Optional list of allowed tools",
+    inputSchema: {
+      name: z.string().describe("Subagent name (e.g., test-runner, security-reviewer)"),
+      description: z.string().describe("What this subagent specializes in"),
+      instructions: z.string().describe("System prompt / instructions for the subagent"),
+      scope: z.enum(["user", "project"]).optional().describe('"user" (~/.claude/agents) or "project" (.claude/agents)'),
+      skills: z.array(z.string()).optional().describe("Optional list of skills this subagent can use"),
+      allowed_tools: z.array(z.string()).optional().describe("Optional list of allowed tools"),
     },
   },
   async ({ name, description, instructions, scope = "user", skills, allowed_tools }) => {
-    // Validate required parameters
-    if (!name) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
-        isError: true,
-      };
-    }
-    if (!description) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'description' parameter is required" }],
-        isError: true,
-      };
-    }
-    if (!instructions) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'instructions' parameter is required" }],
-        isError: true,
-      };
-    }
-    
     const agentsDir = getAgentsDir(scope);
     const agentFile = join(agentsDir, `${name}.md`);
 
@@ -460,11 +432,13 @@ ${instructions}
   }
 );
 
-server.tool(
+server.registerTool(
   "list_subagents",
-  "List all Claude Code subagents in user and/or project scope",
   {
-    scope: { type: "string", description: '"user", "project", or "both" (default)', enum: ["user", "project", "both"] },
+    description: "List all Claude Code subagents in user and/or project scope",
+    inputSchema: {
+      scope: z.enum(["user", "project", "both"]).optional().describe('"user", "project", or "both" (default)'),
+    },
   },
   async ({ scope = "both" }) => {
     let text = "🤖 Subagents\n\n";
@@ -503,12 +477,14 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "read_subagent",
-  "Read a subagent's configuration",
   {
-    name: { type: "string", description: "Subagent name" },
-    scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
+    description: "Read a subagent's configuration",
+    inputSchema: {
+      name: z.string().describe("Subagent name"),
+      scope: z.enum(["user", "project"]).optional().describe('"user" or "project"'),
+    },
   },
   async ({ name, scope = "user" }) => {
     const agentFile = join(getAgentsDir(scope), `${name}.md`);
@@ -529,38 +505,20 @@ server.tool(
 // Output Style Tools
 // =============================================================================
 
-server.tool(
+server.registerTool(
   "create_output_style",
-  `Create a new output style for Claude's responses.
+  {
+    description: `Create a new output style for Claude's responses.
 
 📚 IMPORTANT: Before creating an output style, refer to the documentation at ~/.clsync/docs/claude-code/output-styles.md for the correct format and best practices. Use the read_doc tool to read it first.`,
-  {
-    name: { type: "string", description: "Style name (e.g., concise, detailed, korean)" },
-    description: { type: "string", description: "What this style does" },
-    instructions: { type: "string", description: "Instructions for how Claude should format responses" },
-    scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
+    inputSchema: {
+      name: z.string().describe("Style name (e.g., concise, detailed, korean)"),
+      description: z.string().describe("What this style does"),
+      instructions: z.string().describe("Instructions for how Claude should format responses"),
+      scope: z.enum(["user", "project"]).optional().describe('"user" or "project"'),
+    },
   },
   async ({ name, description, instructions, scope = "user" }) => {
-    // Validate required parameters
-    if (!name) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
-        isError: true,
-      };
-    }
-    if (!description) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'description' parameter is required" }],
-        isError: true,
-      };
-    }
-    if (!instructions) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'instructions' parameter is required" }],
-        isError: true,
-      };
-    }
-    
     const stylesDir = getOutputStylesDir(scope);
     const styleFile = join(stylesDir, `${name}.md`);
 
@@ -594,11 +552,13 @@ ${instructions}
   }
 );
 
-server.tool(
+server.registerTool(
   "list_output_styles",
-  "List all output styles in user and/or project scope",
   {
-    scope: { type: "string", description: '"user", "project", or "both" (default)', enum: ["user", "project", "both"] },
+    description: "List all output styles in user and/or project scope",
+    inputSchema: {
+      scope: z.enum(["user", "project", "both"]).optional().describe('"user", "project", or "both" (default)'),
+    },
   },
   async ({ scope = "both" }) => {
     let text = "✨ Output Styles\n\n";
@@ -654,17 +614,13 @@ import {
   listBothScopes
 } from "../src/repo-sync.js";
 
-server.tool(
+server.registerTool(
   "pull_settings",
-  "Pull settings from GitHub to ~/.clsync/repos/{owner}/{repo}",
   {
-    repo: {
-      type: "string",
-      description: 'GitHub repository (e.g., "owner/repo")',
-    },
-    force: {
-      type: "boolean",
-      description: "Overwrite existing files",
+    description: "Pull settings from GitHub to ~/.clsync/repos/{owner}/{repo}",
+    inputSchema: {
+      repo: z.string().describe('GitHub repository (e.g., "owner/repo")'),
+      force: z.boolean().optional().describe("Overwrite existing files"),
     },
   },
   async ({ repo, force = false }) => {
@@ -679,13 +635,12 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "browse_repo",
-  "Browse available settings in a GitHub repository",
   {
-    repo: {
-      type: "string",
-      description: 'GitHub repository (e.g., "owner/repo")',
+    description: "Browse available settings in a GitHub repository",
+    inputSchema: {
+      repo: z.string().describe('GitHub repository (e.g., "owner/repo")'),
     },
   },
   async ({ repo }) => {
@@ -729,22 +684,14 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "apply_setting",
-  "Apply a setting from ~/.clsync to ~/.claude or .claude",
   {
-    name: {
-      type: "string",
-      description: "Name of the setting to apply",
-    },
-    source: {
-      type: "string",
-      description: 'Source: "local" or "owner/repo"',
-    },
-    scope: {
-      type: "string",
-      description: '"user" (~/.claude) or "project" (.claude)',
-      enum: ["user", "project"],
+    description: "Apply a setting from ~/.clsync to ~/.claude or .claude",
+    inputSchema: {
+      name: z.string().describe("Name of the setting to apply"),
+      source: z.string().optional().describe('Source: "local" or "owner/repo"'),
+      scope: z.enum(["user", "project"]).optional().describe('"user" (~/.claude) or "project" (.claude)'),
     },
   },
   async ({ name, source = "local", scope = "user" }) => {
@@ -762,13 +709,12 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "list_staged",
-  "List items in ~/.clsync staging area",
   {
-    source: {
-      type: "string",
-      description: '"local" for local staging, or "owner/repo" for a pulled repo',
+    description: "List items in ~/.clsync staging area",
+    inputSchema: {
+      source: z.string().optional().describe('"local" for local staging, or "owner/repo" for a pulled repo'),
     },
   },
   async ({ source = "local" }) => {
@@ -810,10 +756,12 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "list_repos",
-  "List pulled repositories in ~/.clsync/repos",
-  {},
+  {
+    description: "List pulled repositories in ~/.clsync/repos",
+    inputSchema: {},
+  },
   async () => {
     try {
       const repos = await listPulledRepos();
@@ -835,30 +783,17 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "promote_setting",
-  "Move a skill/agent/output-style from project .claude → user ~/.claude for global access. Example: promote_setting name='my-skill'",
   {
-    name: {
-      type: "string",
-      description: "REQUIRED: Name of the skill, agent, or output-style to promote (e.g., 'update-project-docs')",
-    },
-    force: {
-      type: "boolean",
-      description: "Optional: Overwrite if exists in target",
-    },
-    rename: {
-      type: "string",
-      description: "Optional: New name to avoid conflict",
+    description: "Move a skill/agent/output-style from project .claude → user ~/.claude for global access. Example: promote_setting name='my-skill'",
+    inputSchema: {
+      name: z.string().describe("Name of the skill, agent, or output-style to promote (e.g., 'update-project-docs')"),
+      force: z.boolean().optional().describe("Overwrite if exists in target"),
+      rename: z.string().optional().describe("New name to avoid conflict"),
     },
   },
   async ({ name, force = false, rename }) => {
-    if (!name) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
-        isError: true,
-      };
-    }
     try {
       const result = await promoteItem(name, { force, rename });
       let text = `✅ Promoted ${result.item.type}: ${result.newName}\n\n`;
@@ -875,30 +810,17 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "demote_setting",
-  "Move a skill/agent/output-style from user ~/.claude → project .claude for project-specific use. Example: demote_setting name='my-skill'",
   {
-    name: {
-      type: "string",
-      description: "REQUIRED: Name of the skill, agent, or output-style to demote (e.g., 'update-project-docs')",
-    },
-    force: {
-      type: "boolean",
-      description: "Optional: Overwrite if exists in target",
-    },
-    rename: {
-      type: "string",
-      description: "Optional: New name to avoid conflict",
+    description: "Move a skill/agent/output-style from user ~/.claude → project .claude for project-specific use. Example: demote_setting name='my-skill'",
+    inputSchema: {
+      name: z.string().describe("Name of the skill, agent, or output-style to demote (e.g., 'update-project-docs')"),
+      force: z.boolean().optional().describe("Overwrite if exists in target"),
+      rename: z.string().optional().describe("New name to avoid conflict"),
     },
   },
   async ({ name, force = false, rename }) => {
-    if (!name) {
-      return {
-        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
-        isError: true,
-      };
-    }
     try {
       const result = await demoteItem(name, { force, rename });
       let text = `✅ Demoted ${result.item.type}: ${result.newName}\n\n`;
@@ -915,10 +837,12 @@ server.tool(
   }
 );
 
-server.tool(
+server.registerTool(
   "compare_scopes",
-  "Compare settings in user (~/.claude) and project (.claude) scopes",
-  {},
+  {
+    description: "Compare settings in user (~/.claude) and project (.claude) scopes",
+    inputSchema: {},
+  },
   async () => {
     try {
       const { project, user } = await listBothScopes();
