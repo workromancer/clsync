@@ -11,7 +11,7 @@ import {
   initClsync,
   stageItem,
   stageAll,
-  listStaged,
+  listLocalStaged,
   applyItem,
   applyAll,
   unstageItem,
@@ -19,8 +19,9 @@ import {
   browseRepo,
   getStatus,
   exportForPush,
-  setRemote,
-  loadManifest
+  loadManifest,
+  listPulledRepos,
+  listRepoItems
 } from "../src/repo-sync.js";
 
 // Banner
@@ -52,34 +53,25 @@ program
   .version("1.0.0");
 
 // ============================================================================
-// DOCS SYNC (default)
+// INIT
 // ============================================================================
 program
-  .command("sync", { isDefault: true })
-  .description("Sync documentation from configured sources")
-  .option("-c, --config <path>", "Config file", "clsync.config.json")
-  .option("-u, --user", "Save to ~/.claude/clsync (default)")
-  .option("-p, --project", "Save to .claude/clsync")
-  .option("-v, --verbose", "Verbose output")
-  .option("-d, --dry-run", "Preview")
-  .option("-f, --force", "Overwrite existing")
-  .action(async (options) => {
+  .command("init")
+  .description("Initialize ~/.clsync directory")
+  .action(async () => {
     try {
       showBanner();
-      const config = await loadConfig(options.config);
-      const scope = options.project ? "project" : "user";
-      
-      config.output.directory = options.project 
-        ? "./.claude/clsync" 
-        : join(os.homedir(), ".claude", "clsync");
-      
-      console.log(chalk.dim(`  📁 Scope: ${scope === 'project' ? '.claude' : '~/.claude'}\n`));
-      
-      if (options.verbose) config.options.verbose = true;
-      if (options.force) config.options.overwrite = true;
-
-      await trackDocs(config, { dryRun: options.dryRun });
-      showSuccess('Sync Complete!');
+      await initClsync();
+      console.log(chalk.cyan('  ✓ Initialized ~/.clsync\n'));
+      console.log(chalk.dim('  Structure:'));
+      console.log(chalk.dim('    ~/.clsync/'));
+      console.log(chalk.dim('    ├── manifest.json'));
+      console.log(chalk.dim('    ├── local/         # Your staged items'));
+      console.log(chalk.dim('    │   ├── skills/'));
+      console.log(chalk.dim('    │   ├── agents/'));
+      console.log(chalk.dim('    │   └── output-styles/'));
+      console.log(chalk.dim('    └── repos/         # Pulled repositories'));
+      console.log(chalk.dim('        └── owner/repo/\n'));
     } catch (error) {
       showError(error.message);
       process.exit(1);
@@ -91,7 +83,7 @@ program
 // ============================================================================
 program
   .command("status")
-  .description("Show ~/.clsync status and staged items")
+  .description("Show ~/.clsync status")
   .action(async () => {
     try {
       showBanner();
@@ -99,24 +91,35 @@ program
       
       console.log(chalk.cyan('  📊 Staging Area Status\n'));
       console.log(chalk.dim(`  Location: ~/.clsync`));
-      console.log(chalk.dim(`  Remote:   ${status.remote || 'Not set'}`));
-      console.log(chalk.dim(`  Last pull: ${status.last_pull || 'Never'}`));
-      console.log(chalk.dim(`  Last push: ${status.last_push || 'Never'}`));
-      console.log(chalk.dim(`  Staged:   ${status.staged_count} items\n`));
+      console.log(chalk.dim(`  Last updated: ${status.last_updated || 'Never'}\n`));
       
-      if (status.staged.length > 0) {
-        console.log(chalk.white.bold('  📦 Staged Items:'));
-        for (const item of status.staged) {
+      // Local staged
+      console.log(chalk.white.bold('  📦 Local Staged:') + chalk.dim(` ${status.local_count} items`));
+      if (status.local_items.length > 0) {
+        for (const item of status.local_items) {
           const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
-          console.log(chalk.dim(`     ${icon} ${item.name} (${item.type})`));
+          console.log(chalk.dim(`     ${icon} ${item.name}`));
         }
-      } else {
-        console.log(chalk.dim('  No items staged. Use:'));
-        console.log(chalk.dim('    clsync stage <name> -u   # Stage from ~/.claude'));
-        console.log(chalk.dim('    clsync stage <name> -p   # Stage from .claude'));
-        console.log(chalk.dim('    clsync pull <repo>       # Pull from GitHub'));
       }
       console.log();
+      
+      // Pulled repos
+      console.log(chalk.white.bold('  🔗 Pulled Repositories:') + chalk.dim(` ${status.repos_count} repos`));
+      if (status.repos.length > 0) {
+        for (const repo of status.repos) {
+          console.log(chalk.dim(`     📁 ${repo.name} (${repo.items.length} items)`));
+          console.log(chalk.dim(`        Last pulled: ${repo.last_pulled}`));
+        }
+      } else {
+        console.log(chalk.dim('     No repositories pulled yet.'));
+      }
+      console.log();
+      
+      if (status.local_count === 0 && status.repos_count === 0) {
+        console.log(chalk.dim('  Get started:'));
+        console.log(chalk.dim('    clsync stage my-skill -u   # Stage from ~/.claude'));
+        console.log(chalk.dim('    clsync pull owner/repo     # Pull from GitHub\n'));
+      }
     } catch (error) {
       showError(error.message);
       process.exit(1);
@@ -124,11 +127,11 @@ program
   });
 
 // ============================================================================
-// STAGE: Copy to ~/.clsync
+// STAGE
 // ============================================================================
 program
   .command("stage [name]")
-  .description("Stage item to ~/.clsync (copy from ~/.claude or .claude)")
+  .description("Stage item to ~/.clsync/local")
   .option("-u, --user", "From ~/.claude (default)")
   .option("-p, --project", "From .claude")
   .option("-a, --all", "Stage all items")
@@ -142,7 +145,7 @@ program
         console.log(chalk.cyan(`  📤 Staging all from ${sourceLabel}...\n`));
         const spinner = ora('Staging...').start();
         const results = await stageAll(scope);
-        spinner.succeed(`Staged ${results.length} items to ~/.clsync`);
+        spinner.succeed(`Staged ${results.length} items to ~/.clsync/local`);
         
         for (const r of results) {
           if (r.error) {
@@ -154,7 +157,7 @@ program
       } else if (name) {
         console.log(chalk.cyan(`  📤 Staging: ${name} from ${sourceLabel}\n`));
         const result = await stageItem(name, scope);
-        console.log(chalk.dim(`     ✓ Staged to: ~/.clsync/${result.item.path}`));
+        console.log(chalk.dim(`     ✓ Staged to: ~/.clsync/local/${result.item.path}`));
       } else {
         showError('Specify item name or use --all');
         process.exit(1);
@@ -168,15 +171,16 @@ program
   });
 
 // ============================================================================
-// APPLY: Copy from ~/.clsync to destination
+// APPLY
 // ============================================================================
 program
   .command("apply [name]")
-  .description("Apply item from ~/.clsync to ~/.claude, .claude, or custom directory")
+  .description("Apply item from ~/.clsync to destination")
   .option("-u, --user", "To ~/.claude (default)")
-  .option("-p, --project", "To .claude (current directory)")
-  .option("-d, --dir <path>", "To custom directory (e.g., /path/to/project/.claude)")
-  .option("-a, --all", "Apply all staged items")
+  .option("-p, --project", "To .claude")
+  .option("-d, --dir <path>", "To custom directory")
+  .option("-s, --source <repo>", "From repo (e.g., owner/repo). Default: local")
+  .option("-a, --all", "Apply all items")
   .action(async (name, options) => {
     try {
       showBanner();
@@ -193,11 +197,14 @@ program
         scope = 'user';
       }
       
+      const source = options.source || 'local';
+      const sourceLabel = source === 'local' ? 'local staging' : source;
+      
       if (options.all) {
-        console.log(chalk.cyan(`  📥 Applying all to ${destLabel}...\n`));
+        console.log(chalk.cyan(`  📥 Applying all from ${sourceLabel} to ${destLabel}...\n`));
         const spinner = ora('Applying...').start();
-        const results = await applyAll(scope);
-        spinner.succeed(`Applied ${results.length} items to ${destLabel}`);
+        const results = await applyAll(scope, source);
+        spinner.succeed(`Applied ${results.length} items`);
         
         for (const r of results) {
           if (r.error) {
@@ -207,8 +214,8 @@ program
           }
         }
       } else if (name) {
-        console.log(chalk.cyan(`  📥 Applying: ${name} to ${destLabel}\n`));
-        const result = await applyItem(name, scope);
+        console.log(chalk.cyan(`  📥 Applying: ${name} from ${sourceLabel}\n`));
+        const result = await applyItem(name, scope, source);
         console.log(chalk.dim(`     ✓ Applied to: ${destLabel}/${result.item.path}`));
       } else {
         showError('Specify item name or use --all');
@@ -223,17 +230,17 @@ program
   });
 
 // ============================================================================
-// UNSTAGE: Remove from ~/.clsync
+// UNSTAGE
 // ============================================================================
 program
   .command("unstage <name>")
-  .description("Remove item from ~/.clsync staging")
+  .description("Remove item from ~/.clsync/local")
   .action(async (name) => {
     try {
       showBanner();
       console.log(chalk.cyan(`  🗑️  Unstaging: ${name}\n`));
       await unstageItem(name);
-      console.log(chalk.dim(`     ✓ Removed from ~/.clsync`));
+      console.log(chalk.dim(`     ✓ Removed from local staging`));
       showSuccess('Unstage Complete!');
     } catch (error) {
       showError(error.message);
@@ -242,17 +249,17 @@ program
   });
 
 // ============================================================================
-// PULL: GitHub → ~/.clsync
+// PULL
 // ============================================================================
 program
   .command("pull <repo>")
-  .description("Pull settings from GitHub to ~/.clsync")
+  .description("Pull from GitHub to ~/.clsync/repos/{owner}/{repo}")
   .option("-f, --force", "Overwrite existing")
   .option("-v, --verbose", "Verbose output")
   .action(async (repo, options) => {
     try {
       showBanner();
-      console.log(chalk.cyan(`  📥 Pulling from: ${repo}\n`));
+      console.log(chalk.cyan(`  📥 Pulling: ${repo}\n`));
       
       const spinner = ora('Fetching from GitHub...').start();
       const results = await pullFromGitHub(repo, {
@@ -260,7 +267,7 @@ program
         onProgress: msg => { if (options.verbose) spinner.text = msg; }
       });
       
-      spinner.succeed(`Downloaded ${results.downloaded} files to ~/.clsync` +
+      spinner.succeed(`Downloaded ${results.downloaded} files to ~/.clsync/repos/${results.repoPath}` +
         (results.skipped > 0 ? ` (skipped ${results.skipped})` : ''));
       
       if (options.verbose && results.files.length > 0) {
@@ -269,7 +276,7 @@ program
         }
       }
       
-      console.log(chalk.dim('\n  Next: clsync apply --all -u  # Apply to ~/.claude'));
+      console.log(chalk.dim(`\n  Next: clsync apply --all -s ${results.repoPath} -u`));
       showSuccess('Pull Complete!');
     } catch (error) {
       showError(error.message);
@@ -278,7 +285,7 @@ program
   });
 
 // ============================================================================
-// BROWSE: View GitHub repo contents
+// BROWSE
 // ============================================================================
 program
   .command("browse <repo>")
@@ -325,27 +332,36 @@ program
   });
 
 // ============================================================================
-// LIST: Show staged items
+// LIST
 // ============================================================================
 program
-  .command("list")
+  .command("list [source]")
   .alias("ls")
-  .description("List staged items in ~/.clsync")
-  .action(async () => {
+  .description("List items (local or from a repo)")
+  .action(async (source) => {
     try {
       showBanner();
-      console.log(chalk.cyan('  📋 Staged in ~/.clsync\n'));
       
-      const staged = await listStaged();
+      let items, label;
       
-      if (staged.length === 0) {
-        console.log(chalk.dim('  No items staged.\n'));
+      if (!source || source === 'local') {
+        items = await listLocalStaged();
+        label = 'Local Staging (~/.clsync/local)';
+      } else {
+        items = await listRepoItems(source);
+        label = `Repository: ${source}`;
+      }
+      
+      console.log(chalk.cyan(`  📋 ${label}\n`));
+      
+      if (items.length === 0) {
+        console.log(chalk.dim('  No items found.\n'));
         return;
       }
       
-      const skills = staged.filter(i => i.type === 'skill');
-      const agents = staged.filter(i => i.type === 'agent');
-      const styles = staged.filter(i => i.type === 'output-style');
+      const skills = items.filter(i => i.type === 'skill');
+      const agents = items.filter(i => i.type === 'agent');
+      const styles = items.filter(i => i.type === 'output-style');
       
       if (skills.length > 0) {
         console.log(chalk.white.bold('  🎯 Skills'));
@@ -369,11 +385,49 @@ program
   });
 
 // ============================================================================
-// EXPORT: For manual git push
+// REPOS
+// ============================================================================
+program
+  .command("repos")
+  .description("List pulled repositories")
+  .action(async () => {
+    try {
+      showBanner();
+      console.log(chalk.cyan('  📦 Pulled Repositories\n'));
+      
+      const repos = await listPulledRepos();
+      
+      if (repos.length === 0) {
+        console.log(chalk.dim('  No repositories pulled yet.\n'));
+        console.log(chalk.dim('  Use: clsync pull owner/repo\n'));
+        return;
+      }
+      
+      for (const repo of repos) {
+        console.log(chalk.white.bold(`  📁 ${repo.name}`));
+        console.log(chalk.dim(`     Last pulled: ${repo.last_pulled}`));
+        console.log(chalk.dim(`     Items: ${repo.items.length}`));
+        
+        for (const item of repo.items) {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          console.log(chalk.dim(`       ${icon} ${item.name}`));
+        }
+        console.log();
+      }
+      
+      console.log(chalk.dim(`  Apply: clsync apply --all -s owner/repo -u\n`));
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// EXPORT
 // ============================================================================
 program
   .command("export <dir>")
-  .description("Export ~/.clsync contents to a directory for git push")
+  .description("Export ~/.clsync/local for git push")
   .action(async (dir) => {
     try {
       showBanner();
@@ -396,45 +450,34 @@ program
   });
 
 // ============================================================================
-// REMOTE: Set GitHub remote
+// SYNC (legacy - docs)
 // ============================================================================
 program
-  .command("remote [repo]")
-  .description("Set or show GitHub remote repository")
-  .action(async (repo) => {
+  .command("sync")
+  .description("Sync documentation from configured sources")
+  .option("-c, --config <path>", "Config file", "clsync.config.json")
+  .option("-u, --user", "Save to ~/.claude/clsync")
+  .option("-p, --project", "Save to .claude/clsync")
+  .option("-v, --verbose", "Verbose")
+  .option("-d, --dry-run", "Preview")
+  .option("-f, --force", "Overwrite")
+  .action(async (options) => {
     try {
       showBanner();
+      const config = await loadConfig(options.config);
+      const scope = options.project ? "project" : "user";
       
-      if (repo) {
-        await setRemote(repo);
-        console.log(chalk.cyan(`  🔗 Remote set: ${repo}\n`));
-      } else {
-        const manifest = await loadManifest();
-        console.log(chalk.cyan(`  🔗 Remote: ${manifest.remote || 'Not set'}\n`));
-      }
-    } catch (error) {
-      showError(error.message);
-      process.exit(1);
-    }
-  });
+      config.output.directory = options.project 
+        ? "./.claude/clsync" 
+        : join(os.homedir(), ".claude", "clsync");
+      
+      console.log(chalk.dim(`  📁 Scope: ${scope === 'project' ? '.claude' : '~/.claude'}\n`));
+      
+      if (options.verbose) config.options.verbose = true;
+      if (options.force) config.options.overwrite = true;
 
-// ============================================================================
-// INIT: Initialize ~/.clsync
-// ============================================================================
-program
-  .command("init")
-  .description("Initialize ~/.clsync directory")
-  .action(async () => {
-    try {
-      showBanner();
-      await initClsync();
-      console.log(chalk.cyan('  ✓ Initialized ~/.clsync\n'));
-      console.log(chalk.dim('  Structure:'));
-      console.log(chalk.dim('    ~/.clsync/'));
-      console.log(chalk.dim('    ├── manifest.json'));
-      console.log(chalk.dim('    ├── skills/'));
-      console.log(chalk.dim('    ├── agents/'));
-      console.log(chalk.dim('    └── output-styles/\n'));
+      await trackDocs(config, { dryRun: options.dryRun });
+      showSuccess('Sync Complete!');
     } catch (error) {
       showError(error.message);
       process.exit(1);

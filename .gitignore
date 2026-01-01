@@ -32,4 +32,4 @@ dist/
 build/
 
 # Claude Code
-./claude
+.claude

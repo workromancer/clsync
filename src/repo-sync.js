@@ -2,15 +2,11 @@
  * CLSYNC - Claude Code Settings Sync
  * 
  * Architecture:
- * - ~/.clsync: Local cache/staging that syncs with GitHub
- * - ~/.claude: User-level Claude settings (source)
- * - .claude: Project-level Claude settings (source)
- * 
- * Flow:
- * 1. stage: Copy from ~/.claude or .claude → ~/.clsync
- * 2. push: Upload ~/.clsync → GitHub
- * 3. pull: Download GitHub → ~/.clsync
- * 4. apply: Copy ~/.clsync → ~/.claude or .claude
+ * ~/.clsync/
+ *   ├── manifest.json
+ *   ├── local/           # Staged from ~/.claude or .claude
+ *   └── repos/           # Pulled from GitHub
+ *       └── owner/repo/
  */
 
 import { mkdir, writeFile, readdir, stat, readFile, cp, rm } from 'fs/promises';
@@ -20,6 +16,8 @@ import os from 'os';
 
 const SETTINGS_DIRS = ['skills', 'agents', 'output-styles'];
 const CLSYNC_DIR = join(os.homedir(), '.clsync');
+const LOCAL_DIR = join(CLSYNC_DIR, 'local');
+const REPOS_DIR = join(CLSYNC_DIR, 'repos');
 const MANIFEST_FILE = join(CLSYNC_DIR, 'manifest.json');
 
 /**
@@ -27,25 +25,24 @@ const MANIFEST_FILE = join(CLSYNC_DIR, 'manifest.json');
  */
 export async function initClsync() {
   await mkdir(CLSYNC_DIR, { recursive: true });
+  await mkdir(LOCAL_DIR, { recursive: true });
+  await mkdir(REPOS_DIR, { recursive: true });
+  
   for (const dir of SETTINGS_DIRS) {
-    await mkdir(join(CLSYNC_DIR, dir), { recursive: true });
+    await mkdir(join(LOCAL_DIR, dir), { recursive: true });
   }
   
-  // Initialize manifest if not exists
   if (!existsSync(MANIFEST_FILE)) {
     await saveManifest({
       version: '1.0.0',
-      remote: null,
-      items: [],
-      last_push: null,
-      last_pull: null
+      repos: {},
+      last_updated: new Date().toISOString()
     });
   }
 }
 
 /**
  * Get Claude directory based on scope
- * @param {string|{custom: string}} scope - 'user', 'project', or {custom: '/path'}
  */
 function getClaudeDir(scope = 'user') {
   if (typeof scope === 'object' && scope.custom) {
@@ -58,38 +55,32 @@ function getClaudeDir(scope = 'user') {
 }
 
 /**
- * Load manifest from ~/.clsync/manifest.json
+ * Get repo directory in ~/.clsync/repos/
+ */
+function getRepoDir(repoUrl) {
+  const { owner, repo } = parseRepoUrl(repoUrl);
+  return join(REPOS_DIR, owner, repo);
+}
+
+/**
+ * Load manifest
  */
 export async function loadManifest() {
   try {
     const content = await readFile(MANIFEST_FILE, 'utf-8');
     return JSON.parse(content);
   } catch {
-    return { 
-      version: '1.0.0', 
-      remote: null,
-      items: [],
-      last_push: null,
-      last_pull: null
-    };
+    return { version: '1.0.0', repos: {}, last_updated: null };
   }
 }
 
 /**
- * Save manifest to ~/.clsync/manifest.json
+ * Save manifest
  */
 export async function saveManifest(manifest) {
   await mkdir(CLSYNC_DIR, { recursive: true });
+  manifest.last_updated = new Date().toISOString();
   await writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2), 'utf-8');
-}
-
-/**
- * Set remote repository
- */
-export async function setRemote(repoUrl) {
-  const manifest = await loadManifest();
-  manifest.remote = repoUrl;
-  await saveManifest(manifest);
 }
 
 /**
@@ -98,7 +89,6 @@ export async function setRemote(repoUrl) {
 function parseMetadata(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
-  
   const metadata = {};
   for (const line of match[1].split('\n')) {
     const m = line.match(/^(\w+):\s*(.+)$/);
@@ -155,8 +145,12 @@ async function scanItems(baseDir) {
   return items;
 }
 
+// =============================================================================
+// LOCAL STAGING (from ~/.claude or .claude)
+// =============================================================================
+
 /**
- * Stage: Copy item from ~/.claude or .claude to ~/.clsync
+ * Stage: Copy item from ~/.claude or .claude to ~/.clsync/local
  */
 export async function stageItem(itemName, scope = 'user') {
   await initClsync();
@@ -170,9 +164,8 @@ export async function stageItem(itemName, scope = 'user') {
   }
   
   const sourcePath = join(sourceDir, item.path);
-  const destPath = join(CLSYNC_DIR, item.path);
+  const destPath = join(LOCAL_DIR, item.path);
   
-  // Copy to staging
   await mkdir(dirname(destPath), { recursive: true });
   
   if (item.type === 'skill') {
@@ -182,25 +175,7 @@ export async function stageItem(itemName, scope = 'user') {
     await writeFile(destPath, content, 'utf-8');
   }
   
-  // Update manifest
-  const manifest = await loadManifest();
-  const existingIdx = manifest.items.findIndex(i => i.name === item.name && i.type === item.type);
-  
-  const entry = {
-    ...item,
-    source_scope: scope,
-    staged_at: new Date().toISOString()
-  };
-  
-  if (existingIdx >= 0) {
-    manifest.items[existingIdx] = entry;
-  } else {
-    manifest.items.push(entry);
-  }
-  
-  await saveManifest(manifest);
-  
-  return { item: entry, path: destPath };
+  return { item, path: destPath };
 }
 
 /**
@@ -226,25 +201,59 @@ export async function stageAll(scope = 'user') {
 }
 
 /**
- * List staged items in ~/.clsync
+ * List local staged items
  */
-export async function listStaged() {
+export async function listLocalStaged() {
   await initClsync();
-  return await scanItems(CLSYNC_DIR);
+  return await scanItems(LOCAL_DIR);
 }
 
 /**
- * Apply: Copy item from ~/.clsync to ~/.claude or .claude
+ * Unstage: Remove item from local staging
  */
-export async function applyItem(itemName, scope = 'user') {
-  const stagedItems = await listStaged();
-  const item = stagedItems.find(i => i.name === itemName);
+export async function unstageItem(itemName) {
+  const items = await listLocalStaged();
+  const item = items.find(i => i.name === itemName);
   
   if (!item) {
-    throw new Error(`Item "${itemName}" not found in staging (~/.clsync)`);
+    throw new Error(`Item "${itemName}" not found in local staging`);
   }
   
-  const sourcePath = join(CLSYNC_DIR, item.path);
+  const itemPath = join(LOCAL_DIR, item.path);
+  await rm(itemPath, { recursive: true, force: true });
+  
+  return { item };
+}
+
+// =============================================================================
+// APPLY (from ~/.clsync to destination)
+// =============================================================================
+
+/**
+ * Apply item from staging to destination
+ * @param {string} itemName - Item name
+ * @param {string} scope - 'user', 'project', or { custom: '/path' }
+ * @param {string} source - 'local' or 'owner/repo'
+ */
+export async function applyItem(itemName, scope = 'user', source = 'local') {
+  let sourceDir;
+  let items;
+  
+  if (source === 'local') {
+    sourceDir = LOCAL_DIR;
+    items = await listLocalStaged();
+  } else {
+    sourceDir = join(REPOS_DIR, source);
+    items = await scanItems(sourceDir);
+  }
+  
+  const item = items.find(i => i.name === itemName);
+  
+  if (!item) {
+    throw new Error(`Item "${itemName}" not found in ${source}`);
+  }
+  
+  const sourcePath = join(sourceDir, item.path);
   const destDir = getClaudeDir(scope);
   const destPath = join(destDir, item.path);
   
@@ -257,19 +266,27 @@ export async function applyItem(itemName, scope = 'user') {
     await writeFile(destPath, content, 'utf-8');
   }
   
-  return { item, path: destPath };
+  return { item, path: destPath, source };
 }
 
 /**
- * Apply all staged items
+ * Apply all items from a source
  */
-export async function applyAll(scope = 'user') {
-  const stagedItems = await listStaged();
+export async function applyAll(scope = 'user', source = 'local') {
+  let items;
+  
+  if (source === 'local') {
+    items = await listLocalStaged();
+  } else {
+    const sourceDir = join(REPOS_DIR, source);
+    items = await scanItems(sourceDir);
+  }
+  
   const results = [];
   
-  for (const item of stagedItems) {
+  for (const item of items) {
     try {
-      const result = await applyItem(item.name, scope);
+      const result = await applyItem(item.name, scope, source);
       results.push(result);
     } catch (e) {
       results.push({ item, error: e.message });
@@ -279,30 +296,8 @@ export async function applyAll(scope = 'user') {
   return results;
 }
 
-/**
- * Unstage: Remove item from ~/.clsync
- */
-export async function unstageItem(itemName) {
-  const stagedItems = await listStaged();
-  const item = stagedItems.find(i => i.name === itemName);
-  
-  if (!item) {
-    throw new Error(`Item "${itemName}" not found in staging`);
-  }
-  
-  const itemPath = join(CLSYNC_DIR, item.path);
-  await rm(itemPath, { recursive: true, force: true });
-  
-  // Update manifest
-  const manifest = await loadManifest();
-  manifest.items = manifest.items.filter(i => i.name !== itemName);
-  await saveManifest(manifest);
-  
-  return { item };
-}
-
 // =============================================================================
-// GitHub Integration
+// GITHUB INTEGRATION
 // =============================================================================
 
 /**
@@ -323,9 +318,7 @@ export function parseRepoUrl(repo) {
  */
 async function fetchRepoTree(owner, repo, branch = 'main') {
   const headers = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'clsync' };
-  if (process.env.GITHUB_TOKEN) {
-    headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
-  }
+  if (process.env.GITHUB_TOKEN) headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
   
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
@@ -348,16 +341,23 @@ async function fetchFileContent(owner, repo, branch, path) {
 }
 
 /**
- * Pull from GitHub to ~/.clsync
+ * Pull from GitHub to ~/.clsync/repos/{owner}/{repo}
  */
 export async function pullFromGitHub(repoUrl, options = {}) {
   const { force = false, onProgress } = options;
   await initClsync();
   
   const { owner, repo, branch } = parseRepoUrl(repoUrl);
+  const repoDir = join(REPOS_DIR, owner, repo);
   const log = msg => onProgress && onProgress(msg);
   
   log(`Fetching from ${owner}/${repo}...`);
+  
+  // Create repo directory
+  await mkdir(repoDir, { recursive: true });
+  for (const dir of SETTINGS_DIRS) {
+    await mkdir(join(repoDir, dir), { recursive: true });
+  }
   
   const tree = await fetchRepoTree(owner, repo, branch);
   const settingsFiles = tree.filter(f => 
@@ -368,10 +368,10 @@ export async function pullFromGitHub(repoUrl, options = {}) {
     throw new Error('No settings found in repository');
   }
   
-  const results = { downloaded: 0, skipped: 0, files: [] };
+  const results = { downloaded: 0, skipped: 0, files: [], repoPath: `${owner}/${repo}` };
   
   for (const file of settingsFiles) {
-    const targetPath = join(CLSYNC_DIR, file.path);
+    const targetPath = join(repoDir, file.path);
     
     if (!force && existsSync(targetPath)) {
       results.skipped++;
@@ -388,9 +388,11 @@ export async function pullFromGitHub(repoUrl, options = {}) {
   
   // Update manifest
   const manifest = await loadManifest();
-  manifest.remote = repoUrl;
-  manifest.last_pull = new Date().toISOString();
-  manifest.items = await listStaged();
+  manifest.repos[`${owner}/${repo}`] = {
+    url: repoUrl,
+    last_pulled: new Date().toISOString(),
+    items_count: results.downloaded + results.skipped
+  };
   await saveManifest(manifest);
   
   return results;
@@ -426,30 +428,60 @@ export async function browseRepo(repoUrl) {
 }
 
 /**
+ * List pulled repos
+ */
+export async function listPulledRepos() {
+  await initClsync();
+  const manifest = await loadManifest();
+  
+  const repos = [];
+  for (const [name, info] of Object.entries(manifest.repos || {})) {
+    const repoDir = join(REPOS_DIR, name);
+    const items = await scanItems(repoDir);
+    repos.push({
+      name,
+      ...info,
+      items
+    });
+  }
+  
+  return repos;
+}
+
+/**
+ * List items from a specific repo
+ */
+export async function listRepoItems(repoPath) {
+  const repoDir = join(REPOS_DIR, repoPath);
+  return await scanItems(repoDir);
+}
+
+/**
  * Get current sync status
  */
 export async function getStatus() {
   await initClsync();
   const manifest = await loadManifest();
-  const staged = await listStaged();
+  const localStaged = await listLocalStaged();
+  const repos = await listPulledRepos();
   
   return {
-    remote: manifest.remote,
-    last_push: manifest.last_push,
-    last_pull: manifest.last_pull,
-    staged_count: staged.length,
-    staged: staged
+    local_count: localStaged.length,
+    local_items: localStaged,
+    repos_count: repos.length,
+    repos,
+    last_updated: manifest.last_updated
   };
 }
 
 /**
- * Export ~/.clsync for manual git push
+ * Export local staging for git push
  */
 export async function exportForPush(outputDir) {
-  const staged = await listStaged();
+  const staged = await listLocalStaged();
   
   for (const item of staged) {
-    const sourcePath = join(CLSYNC_DIR, item.path);
+    const sourcePath = join(LOCAL_DIR, item.path);
     const destPath = join(outputDir, item.path);
     
     await mkdir(dirname(destPath), { recursive: true });
@@ -461,10 +493,6 @@ export async function exportForPush(outputDir) {
       await writeFile(destPath, content, 'utf-8');
     }
   }
-  
-  // Write manifest
-  const manifest = await loadManifest();
-  await writeFile(join(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   
   return { exported: staged.length, items: staged };
 }
