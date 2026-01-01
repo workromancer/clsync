@@ -406,21 +406,31 @@ export async function browseRepo(repoUrl) {
   const tree = await fetchRepoTree(owner, repo, branch);
   
   const items = [];
-  const seen = new Set();
+  const skillDirs = new Set();
   
+  // First pass: find skill directories (those with SKILL.md)
+  for (const file of tree) {
+    if (file.type === 'blob' && file.path.match(/^skills\/[^/]+\/SKILL\.md$/)) {
+      const skillName = file.path.split('/')[1];
+      skillDirs.add(skillName);
+    }
+  }
+  
+  // Add skills
+  for (const name of skillDirs) {
+    items.push({ type: 'skill', name, path: `skills/${name}` });
+  }
+  
+  // Find agents and output-styles
   for (const file of tree) {
     if (file.type !== 'blob') continue;
     
-    if (file.path.startsWith('skills/')) {
-      const name = file.path.split('/')[1];
-      if (!seen.has(name)) {
-        seen.add(name);
-        items.push({ type: 'skill', name, path: `skills/${name}` });
-      }
-    } else if (file.path.startsWith('agents/') && file.path.endsWith('.md')) {
-      items.push({ type: 'agent', name: basename(file.path, '.md'), path: file.path });
+    if (file.path.startsWith('agents/') && file.path.endsWith('.md')) {
+      const name = basename(file.path, '.md');
+      items.push({ type: 'agent', name, path: file.path });
     } else if (file.path.startsWith('output-styles/') && file.path.endsWith('.md')) {
-      items.push({ type: 'output-style', name: basename(file.path, '.md'), path: file.path });
+      const name = basename(file.path, '.md');
+      items.push({ type: 'output-style', name, path: file.path });
     }
   }
   
