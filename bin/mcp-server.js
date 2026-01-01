@@ -306,19 +306,44 @@ ${instructions}
 
 server.tool(
   "list_skills",
-  "List all Claude Code skills",
+  "List all Claude Code skills in user and/or project scope",
   {
-    scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
+    scope: { type: "string", description: '"user", "project", or "both" (default)', enum: ["user", "project", "both"] },
   },
-  async ({ scope = "user" }) => {
-    const skills = await listItems(getSkillsDir(scope), "dir");
-
-    if (skills.length === 0) {
-      return { content: [{ type: "text", text: `No skills found in ${getSkillsDir(scope)}` }] };
+  async ({ scope = "both" }) => {
+    let text = "🎯 Skills\n\n";
+    
+    if (scope === "both" || scope === "user") {
+      const userSkills = await listItems(getSkillsDir("user"), "dir");
+      text += `📁 User (~/.claude/skills): ${userSkills.length} items\n`;
+      if (userSkills.length > 0) {
+        for (const s of userSkills) {
+          text += `   - ${s.name}\n`;
+        }
+      } else {
+        text += `   (empty)\n`;
+      }
+      text += `\n`;
     }
-
-    const list = skills.map((s) => `- ${s.name}`).join("\n");
-    return { content: [{ type: "text", text: `🎯 Skills (${skills.length}):\n\n${list}` }] };
+    
+    if (scope === "both" || scope === "project") {
+      const projectSkills = await listItems(getSkillsDir("project"), "dir");
+      text += `📁 Project (.claude/skills): ${projectSkills.length} items\n`;
+      if (projectSkills.length > 0) {
+        for (const s of projectSkills) {
+          text += `   - ${s.name}\n`;
+        }
+      } else {
+        text += `   (empty)\n`;
+      }
+      text += `\n`;
+    }
+    
+    text += `💡 Move between scopes:\n`;
+    text += `   promote_setting <name>  # project → user (global)\n`;
+    text += `   demote_setting <name>   # user → project (local)`;
+    
+    return { content: [{ type: "text", text }] };
   }
 );
 
@@ -433,19 +458,44 @@ ${instructions}
 
 server.tool(
   "list_subagents",
-  "List all Claude Code subagents",
+  "List all Claude Code subagents in user and/or project scope",
   {
-    scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
+    scope: { type: "string", description: '"user", "project", or "both" (default)', enum: ["user", "project", "both"] },
   },
-  async ({ scope = "user" }) => {
-    const agents = await listItems(getAgentsDir(scope), "file");
-
-    if (agents.length === 0) {
-      return { content: [{ type: "text", text: `No subagents found in ${getAgentsDir(scope)}` }] };
+  async ({ scope = "both" }) => {
+    let text = "🤖 Subagents\n\n";
+    
+    if (scope === "both" || scope === "user") {
+      const userAgents = await listItems(getAgentsDir("user"), "file");
+      text += `📁 User (~/.claude/agents): ${userAgents.length} items\n`;
+      if (userAgents.length > 0) {
+        for (const a of userAgents) {
+          text += `   - @${a.name}\n`;
+        }
+      } else {
+        text += `   (empty)\n`;
+      }
+      text += `\n`;
     }
-
-    const list = agents.map((a) => `- @${a.name}`).join("\n");
-    return { content: [{ type: "text", text: `🤖 Subagents (${agents.length}):\n\n${list}` }] };
+    
+    if (scope === "both" || scope === "project") {
+      const projectAgents = await listItems(getAgentsDir("project"), "file");
+      text += `📁 Project (.claude/agents): ${projectAgents.length} items\n`;
+      if (projectAgents.length > 0) {
+        for (const a of projectAgents) {
+          text += `   - @${a.name}\n`;
+        }
+      } else {
+        text += `   (empty)\n`;
+      }
+      text += `\n`;
+    }
+    
+    text += `💡 Move between scopes:\n`;
+    text += `   promote_setting <name>  # project → user (global)\n`;
+    text += `   demote_setting <name>   # user → project (local)`;
+    
+    return { content: [{ type: "text", text }] };
   }
 );
 
@@ -540,19 +590,44 @@ ${instructions}
 
 server.tool(
   "list_output_styles",
-  "List all output styles",
+  "List all output styles in user and/or project scope",
   {
-    scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
+    scope: { type: "string", description: '"user", "project", or "both" (default)', enum: ["user", "project", "both"] },
   },
-  async ({ scope = "user" }) => {
-    const styles = await listItems(getOutputStylesDir(scope), "file");
-
-    if (styles.length === 0) {
-      return { content: [{ type: "text", text: `No output styles found` }] };
+  async ({ scope = "both" }) => {
+    let text = "✨ Output Styles\n\n";
+    
+    if (scope === "both" || scope === "user") {
+      const userStyles = await listItems(getOutputStylesDir("user"), "file");
+      text += `📁 User (~/.claude/output-styles): ${userStyles.length} items\n`;
+      if (userStyles.length > 0) {
+        for (const s of userStyles) {
+          text += `   - ${s.name}\n`;
+        }
+      } else {
+        text += `   (empty)\n`;
+      }
+      text += `\n`;
     }
-
-    const list = styles.map((s) => `- ${s.name}`).join("\n");
-    return { content: [{ type: "text", text: `✨ Output Styles (${styles.length}):\n\n${list}` }] };
+    
+    if (scope === "both" || scope === "project") {
+      const projectStyles = await listItems(getOutputStylesDir("project"), "file");
+      text += `📁 Project (.claude/output-styles): ${projectStyles.length} items\n`;
+      if (projectStyles.length > 0) {
+        for (const s of projectStyles) {
+          text += `   - ${s.name}\n`;
+        }
+      } else {
+        text += `   (empty)\n`;
+      }
+      text += `\n`;
+    }
+    
+    text += `💡 Move between scopes:\n`;
+    text += `   promote_setting <name>  # project → user (global)\n`;
+    text += `   demote_setting <name>   # user → project (local)`;
+    
+    return { content: [{ type: "text", text }] };
   }
 );
 
