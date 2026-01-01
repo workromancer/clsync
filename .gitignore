@@ -30,3 +30,6 @@ coverage/
 # Build
 dist/
 build/
+
+# Claude Code
+./claude
