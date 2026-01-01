@@ -501,37 +501,34 @@ server.tool(
 // =============================================================================
 
 import { 
-  pullSettings, 
-  listLocalSettings, 
+  pullFromGitHub, 
+  listLocalStaged, 
   browseRepo, 
-  installItem, 
-  copyItem 
+  applyItem,
+  applyAll,
+  listRepoItems,
+  listPulledRepos
 } from "../src/repo-sync.js";
 
 server.tool(
   "pull_settings",
-  "Pull all Claude Code settings from a GitHub repository",
+  "Pull settings from GitHub to ~/.clsync/repos/{owner}/{repo}",
   {
     repo: {
       type: "string",
       description: 'GitHub repository (e.g., "owner/repo")',
-    },
-    scope: {
-      type: "string",
-      description: '"user" (~/.claude) or "project" (.claude)',
-      enum: ["user", "project"],
     },
     force: {
       type: "boolean",
       description: "Overwrite existing files",
     },
   },
-  async ({ repo, scope = "user", force = false }) => {
+  async ({ repo, force = false }) => {
     try {
-      const results = await pullSettings(repo, { scope, force });
-      const summary = `Downloaded ${results.downloaded} files` +
-        (results.skipped > 0 ? `, skipped ${results.skipped}` : "");
-      return { content: [{ type: "text", text: `✅ Pull Complete!\n\n${summary}` }] };
+      const results = await pullFromGitHub(repo, { force });
+      const summary = `Downloaded ${results.downloaded} files to ~/.clsync/repos/${results.repoPath}` +
+        (results.skipped > 0 ? ` (skipped ${results.skipped})` : "");
+      return { content: [{ type: "text", text: `✅ Pull Complete!\n\n${summary}\n\nUse apply_setting to apply items.` }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
     }
@@ -549,29 +546,28 @@ server.tool(
   },
   async ({ repo }) => {
     try {
-      const { items, hasManifest } = await browseRepo(repo);
+      const items = await browseRepo(repo);
       
       if (items.length === 0) {
         return { content: [{ type: "text", text: "No settings found in repository." }] };
       }
 
-      let text = hasManifest ? "" : "⚠ No manifest found. Limited metadata.\n\n";
-      
+      let text = "";
       const skills = items.filter(i => i.type === 'skill');
       const agents = items.filter(i => i.type === 'agent');
       const styles = items.filter(i => i.type === 'output-style');
 
       if (skills.length > 0) {
-        text += "🎯 Skills:\n" + skills.map(s => `  - ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n") + "\n\n";
+        text += "🎯 Skills:\n" + skills.map(s => `  - ${s.name}`).join("\n") + "\n\n";
       }
       if (agents.length > 0) {
-        text += "🤖 Subagents:\n" + agents.map(a => `  - ${a.name}${a.description ? `: ${a.description}` : ""}`).join("\n") + "\n\n";
+        text += "🤖 Subagents:\n" + agents.map(a => `  - ${a.name}`).join("\n") + "\n\n";
       }
       if (styles.length > 0) {
-        text += "✨ Output Styles:\n" + styles.map(s => `  - ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n") + "\n\n";
+        text += "✨ Output Styles:\n" + styles.map(s => `  - ${s.name}`).join("\n") + "\n\n";
       }
 
-      text += `Use install_setting to install a specific item.`;
+      text += `Use pull_settings to download.`;
       return { content: [{ type: "text", text }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
@@ -580,34 +576,30 @@ server.tool(
 );
 
 server.tool(
-  "install_setting",
-  "Install a specific setting from a GitHub repository",
+  "apply_setting",
+  "Apply a setting from ~/.clsync to ~/.claude or .claude",
   {
-    repo: {
-      type: "string",
-      description: 'GitHub repository (e.g., "owner/repo")',
-    },
     name: {
       type: "string",
-      description: "Name of the setting to install",
+      description: "Name of the setting to apply",
+    },
+    source: {
+      type: "string",
+      description: 'Source: "local" or "owner/repo"',
     },
     scope: {
       type: "string",
-      description: '"user" or "project"',
+      description: '"user" (~/.claude) or "project" (.claude)',
       enum: ["user", "project"],
     },
-    force: {
-      type: "boolean",
-      description: "Overwrite existing",
-    },
   },
-  async ({ repo, name, scope = "user", force = false }) => {
+  async ({ name, source = "local", scope = "user" }) => {
     try {
-      const results = await installItem(repo, name, { scope, force });
+      const result = await applyItem(name, scope, source);
       return { 
         content: [{ 
           type: "text", 
-          text: `✅ Installed ${results.item.type}: ${results.item.name}\n\nFiles:\n${results.files.map(f => `  ✓ ${f}`).join("\n")}` 
+          text: `✅ Applied ${result.item.type}: ${result.item.name}\n\nTo: ${scope === 'user' ? '~/.claude' : '.claude'}/${result.item.path}` 
         }] 
       };
     } catch (error) {
@@ -617,37 +609,44 @@ server.tool(
 );
 
 server.tool(
-  "list_local_settings",
-  "List local Claude Code settings with metadata",
+  "list_staged",
+  "List items in ~/.clsync staging area",
   {
-    scope: {
+    source: {
       type: "string",
-      description: '"user" or "project"',
-      enum: ["user", "project"],
+      description: '"local" for local staging, or "owner/repo" for a pulled repo',
     },
   },
-  async ({ scope = "user" }) => {
+  async ({ source = "local" }) => {
     try {
-      const items = await listLocalSettings(scope);
+      let items;
+      let label;
+      
+      if (source === "local") {
+        items = await listLocalStaged();
+        label = "Local Staging (~/.clsync/local)";
+      } else {
+        items = await listRepoItems(source);
+        label = `Repository: ${source}`;
+      }
 
       if (items.length === 0) {
-        return { content: [{ type: "text", text: "No local settings found." }] };
+        return { content: [{ type: "text", text: `No items in ${label}.` }] };
       }
 
-      let text = `📋 Local Settings (${scope}):\n\n`;
-      
+      let text = `📋 ${label}:\n\n`;
       const skills = items.filter(i => i.type === 'skill');
       const agents = items.filter(i => i.type === 'agent');
       const styles = items.filter(i => i.type === 'output-style');
 
       if (skills.length > 0) {
-        text += "🎯 Skills:\n" + skills.map(s => `  - ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n") + "\n\n";
+        text += "🎯 Skills:\n" + skills.map(s => `  - ${s.name}`).join("\n") + "\n\n";
       }
       if (agents.length > 0) {
-        text += "🤖 Subagents:\n" + agents.map(a => `  - ${a.name}${a.description ? `: ${a.description}` : ""}`).join("\n") + "\n\n";
+        text += "🤖 Subagents:\n" + agents.map(a => `  - ${a.name}`).join("\n") + "\n\n";
       }
       if (styles.length > 0) {
-        text += "✨ Output Styles:\n" + styles.map(s => `  - ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n") + "\n";
+        text += "✨ Output Styles:\n" + styles.map(s => `  - ${s.name}`).join("\n") + "\n";
       }
 
       return { content: [{ type: "text", text }] };
@@ -658,30 +657,24 @@ server.tool(
 );
 
 server.tool(
-  "copy_setting",
-  "Copy a setting between user and project scope",
-  {
-    name: {
-      type: "string",
-      description: "Name of the setting to copy",
-    },
-    to_project: {
-      type: "boolean",
-      description: "Copy from user to project (true) or project to user (false)",
-    },
-  },
-  async ({ name, to_project = true }) => {
+  "list_repos",
+  "List pulled repositories in ~/.clsync/repos",
+  {},
+  async () => {
     try {
-      const fromScope = to_project ? "user" : "project";
-      const toScope = to_project ? "project" : "user";
-      
-      const results = await copyItem(name, fromScope, toScope);
-      return { 
-        content: [{ 
-          type: "text", 
-          text: `✅ Copied ${results.item.type}: ${results.item.name}\n\nFrom: ${fromScope === 'user' ? '~/.claude' : '.claude'}\nTo: ${toScope === 'user' ? '~/.claude' : '.claude'}` 
-        }] 
-      };
+      const repos = await listPulledRepos();
+
+      if (repos.length === 0) {
+        return { content: [{ type: "text", text: "No repositories pulled yet.\n\nUse pull_settings to pull from GitHub." }] };
+      }
+
+      let text = "📦 Pulled Repositories:\n\n";
+      for (const repo of repos) {
+        text += `📁 ${repo.name} (${repo.items.length} items)\n`;
+        text += `   Last pulled: ${repo.last_pulled}\n`;
+      }
+
+      return { content: [{ type: "text", text }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
     }
@@ -714,5 +707,6 @@ async function main() {
 }
 
 main().catch(console.error);
+
 
 
