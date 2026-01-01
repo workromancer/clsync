@@ -296,8 +296,23 @@ program
       console.log(chalk.cyan(`  🔍 Browsing: ${repo}\n`));
       
       const spinner = ora('Fetching...').start();
+      
+      // Try to fetch clsync.json metadata first
+      const { fetchRepoMetadata } = await import("../src/repo-sync.js");
+      const metadata = await fetchRepoMetadata(repo);
+      
       const items = await browseRepo(repo);
       spinner.stop();
+      
+      // Show repository metadata if available
+      if (metadata) {
+        console.log(chalk.green('  ✓ clsync repository\n'));
+        console.log(chalk.dim(`  Name:        ${metadata.name}`));
+        console.log(chalk.dim(`  Description: ${metadata.description}`));
+        console.log(chalk.dim(`  Author:      ${metadata.author}`));
+        console.log(chalk.dim(`  Created:     ${metadata.created_at}`));
+        console.log(chalk.dim(`  Updated:     ${metadata.updated_at}\n`));
+      }
       
       if (items.length === 0) {
         console.log(chalk.dim('  No settings found.\n'));
@@ -427,15 +442,27 @@ program
 // ============================================================================
 program
   .command("export <dir>")
-  .description("Export ~/.clsync/local for git push")
-  .action(async (dir) => {
+  .description("Export ~/.clsync/local for git push (creates clsync.json)")
+  .option("-a, --author <name>", "Author name for clsync.json")
+  .option("-d, --desc <text>", "Description for clsync.json")
+  .action(async (dir, options) => {
     try {
       showBanner();
       console.log(chalk.cyan(`  📤 Exporting to: ${dir}\n`));
       
       const spinner = ora('Exporting...').start();
-      const results = await exportForPush(dir);
+      const results = await exportForPush(dir, {
+        author: options.author,
+        description: options.desc
+      });
       spinner.succeed(`Exported ${results.exported} items`);
+      
+      console.log(chalk.dim('\n  Created files:'));
+      console.log(chalk.dim(`    📄 clsync.json (repository metadata)`));
+      for (const item of results.items) {
+        const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+        console.log(chalk.dim(`    ${icon} ${item.path}`));
+      }
       
       console.log(chalk.dim('\n  Next steps:'));
       console.log(chalk.dim(`    cd ${dir}`));

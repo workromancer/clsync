@@ -475,11 +475,15 @@ export async function getStatus() {
 }
 
 /**
- * Export local staging for git push
+ * Export local staging for git push with clsync.json metadata
  */
-export async function exportForPush(outputDir) {
+export async function exportForPush(outputDir, options = {}) {
+  const { author, description } = options;
   const staged = await listLocalStaged();
   
+  await mkdir(outputDir, { recursive: true });
+  
+  // Copy staged items
   for (const item of staged) {
     const sourcePath = join(LOCAL_DIR, item.path);
     const destPath = join(outputDir, item.path);
@@ -494,5 +498,62 @@ export async function exportForPush(outputDir) {
     }
   }
   
-  return { exported: staged.length, items: staged };
+  // Create clsync.json - repository metadata file
+  const clsyncJson = {
+    $schema: "https://clsync.dev/schema/v1.json",
+    version: "1.0.0",
+    name: basename(outputDir),
+    description: description || "Claude Code settings repository",
+    author: author || os.userInfo().username,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    items: staged.map(item => ({
+      type: item.type,
+      name: item.name,
+      path: item.path,
+      description: item.description || null
+    })),
+    stats: {
+      skills: staged.filter(i => i.type === 'skill').length,
+      agents: staged.filter(i => i.type === 'agent').length,
+      output_styles: staged.filter(i => i.type === 'output-style').length,
+      total: staged.length
+    }
+  };
+  
+  await writeFile(
+    join(outputDir, 'clsync.json'),
+    JSON.stringify(clsyncJson, null, 2),
+    'utf-8'
+  );
+  
+  return { exported: staged.length, items: staged, clsyncJson };
 }
+
+/**
+ * Fetch clsync.json from a GitHub repository
+ */
+export async function fetchRepoMetadata(repoUrl) {
+  const { owner, repo, branch } = parseRepoUrl(repoUrl);
+  
+  try {
+    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/clsync.json`;
+    const response = await fetch(rawUrl, { headers: { 'User-Agent': 'clsync' } });
+    
+    if (!response.ok) return null;
+    
+    const content = await response.text();
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a repo is a clsync repository
+ */
+export async function isClsyncRepo(repoUrl) {
+  const metadata = await fetchRepoMetadata(repoUrl);
+  return metadata !== null;
+}
+
