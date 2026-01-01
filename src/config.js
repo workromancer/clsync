@@ -3,9 +3,9 @@ import { existsSync } from 'fs';
 import { resolve } from 'path';
 
 const CONFIG_FILENAMES = [
-  'cc-syncer.config.json',
-  '.cc-syncerrc.json',
-  '.cc-syncerrc'
+  'clsync.config.json',
+  '.clsyncrc.json',
+  '.clsyncrc'
 ];
 
 /**

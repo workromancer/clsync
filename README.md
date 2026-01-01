@@ -1,13 +1,13 @@
-# CC-SYNCER
+# CLSYNC
 
 ```
   ┌───────────────────────────────────────┐
-  │  CC-SYNCER                           │
+  │  CLSYNC                              │
   │  Claude Code Environment Sync        │
   └───────────────────────────────────────┘
 ```
 
-� 여러 컴퓨터에서 Claude Code 환경을 동기화합니다.
+🔄 여러 컴퓨터에서 Claude Code 환경을 동기화합니다.
 문서, skills, subagents, output styles를 한 곳에서 관리하세요.
 
 ## ✨ 주요 기능
@@ -22,10 +22,10 @@
 
 ```bash
 # npm 글로벌 설치
-npm install -g cc-syncer
+npm install -g clsync
 
 # 또는 npx로 바로 실행
-npx cc-syncer
+npx clsync
 ```
 
 ## 🚀 빠른 시작
@@ -34,36 +34,36 @@ npx cc-syncer
 
 ```bash
 # 기본 실행 (문서를 ~/.claude/cc-docs에 저장)
-npx cc-syncer
+npx clsync
 
 # 프로젝트 폴더에 저장 (./claude/cc-docs)
-npx cc-syncer -p
+npx clsync -p
 
 # 미리보기 (실제 다운로드 X)
-npx cc-syncer --dry-run
+npx clsync --dry-run
 
 # 상세 로그 + 큰 배너
-npx cc-syncer --verbose
+npx clsync --verbose
 
 # 기존 파일 덮어쓰기
-npx cc-syncer --force
+npx clsync --force
 ```
 
 ### MCP 서버로 사용
 
 ```bash
 # Claude Code에 MCP 서버 등록
-claude mcp add cc-syncer --transport stdio -- npx -y cc-syncer-mcp
+claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```
 
 ## 📖 CLI 옵션
 
 ```
-Usage: cc-syncer [options]
+Usage: clsync [options]
 
 Options:
   -V, --version        버전 출력
-  -c, --config <path>  설정 파일 경로 (기본: cc-syncer.config.json)
+  -c, --config <path>  설정 파일 경로 (기본: clsync.config.json)
   -u, --user           ~/.claude/cc-docs에 저장 (기본값)
   -p, --project        ./claude/cc-docs에 저장 (현재 디렉터리)
   -v, --verbose        상세 로그 출력
@@ -81,7 +81,7 @@ Options:
 
 ## ⚙️ 설정 파일
 
-`cc-syncer.config.json` 파일로 동기화할 문서를 설정합니다:
+`clsync.config.json` 파일로 동기화할 문서를 설정합니다:
 
 ### 기본 설정 (Claude Code 문서)
 
@@ -129,13 +129,13 @@ Options:
 
 ## 🔌 MCP 서버
 
-CC-SYNCER는 **MCP (Model Context Protocol) 서버**로도 동작합니다.
+CLSYNC는 **MCP (Model Context Protocol) 서버**로도 동작합니다.
 
 ### 설정
 
 ```bash
 # Claude Code에 MCP 서버 등록
-claude mcp add cc-syncer --transport stdio -- npx -y cc-syncer-mcp
+claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```
 
 ### 사용 가능한 도구
@@ -213,19 +213,6 @@ claude mcp add cc-syncer --transport stdio -- npx -y cc-syncer-mcp
 ~/.claude/output-styles/my-style.md     # User scope
 .claude/output-styles/my-style.md       # Project scope
 ```
-
-## 📋 동기화되는 문서 목록
-
-| 문서                  | 설명                     |
-| --------------------- | ------------------------ |
-| `skills.md`           | 스킬 생성 가이드         |
-| `sub-agents.md`       | 서브에이전트 생성 가이드 |
-| `plugins.md`          | 플러그인 개발 가이드     |
-| `hooks-guide.md`      | 훅 설정 가이드           |
-| `mcp.md`              | MCP 서버 연동 가이드     |
-| `headless.md`         | 헤드리스 모드 가이드     |
-| `output-styles.md`    | 출력 스타일 가이드       |
-| `discover-plugins.md` | 플러그인 탐색 가이드     |
 
 ## 📄 메타데이터
 

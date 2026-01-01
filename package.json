@@ -1,11 +1,11 @@
 {
-  "name": "cc-syncer",
+  "name": "clsync",
   "version": "1.0.0",
   "description": "Sync Claude Code environment across multiple machines - docs, skills, subagents, and more",
   "main": "src/index.js",
   "bin": {
-    "cc-syncer": "./bin/cli.js",
-    "cc-syncer-mcp": "./bin/mcp-server.js"
+    "clsync": "./bin/cli.js",
+    "clsync-mcp": "./bin/mcp-server.js"
   },
   "scripts": {
     "start": "node bin/cli.js",
