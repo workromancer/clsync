@@ -43,13 +43,13 @@ ${chalk.cyan('  ██║     ██║     ╚════██║  ╚██�
 ${chalk.cyan('  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗')}
 ${chalk.cyan('   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝')}
 ${chalk.dim('  ───────────────────────────────────────────────────')}
-${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.0')}
+${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.1')}
 `;
 
 // Compact banner (for 40-54 columns)
 const bannerCompact = `
 ${chalk.cyan.bold('  ╔═══════════════════════════╗')}
-${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.0')}      ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.1')}      ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ║')}  ${chalk.dim('Claude Code Sync')}        ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ╚═══════════════════════════╝')}
 `;
@@ -566,7 +566,7 @@ if (args.length === 0) {
 program
   .name("clsync")
   .description("Sync Claude Code settings via ~/.clsync staging area")
-  .version("0.2.0");
+  .version("0.2.1");
 
 // ============================================================================
 // INIT
