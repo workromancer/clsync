@@ -21,7 +21,10 @@ import {
   exportForPush,
   loadManifest,
   listPulledRepos,
-  listRepoItems
+  listRepoItems,
+  promoteItem,
+  demoteItem,
+  listBothScopes
 } from "../src/repo-sync.js";
 
 // Banner
@@ -516,4 +519,120 @@ program
     }
   });
 
+// ============================================================================
+// PROMOTE: project → user
+// ============================================================================
+program
+  .command("promote <name>")
+  .description("Move setting from .claude (project) → ~/.claude (user)")
+  .option("-f, --force", "Overwrite if exists")
+  .option("-r, --rename <newname>", "Rename to avoid conflict")
+  .action(async (name, options) => {
+    try {
+      showBanner();
+      console.log(chalk.cyan(`  📤 Promoting: ${name}\n`));
+      console.log(chalk.dim(`  From: .claude (project)`));
+      console.log(chalk.dim(`  To:   ~/.claude (user)\n`));
+      
+      const result = await promoteItem(name, {
+        force: options.force,
+        rename: options.rename
+      });
+      
+      if (result.renamed) {
+        console.log(chalk.yellow(`  ⚠ Renamed: ${result.originalName} → ${result.newName}`));
+      }
+      
+      console.log(chalk.dim(`  ✓ ${result.item.type}: ${result.newName}`));
+      console.log(chalk.dim(`  Now available globally!\n`));
+      
+      showSuccess('Promote Complete!');
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// DEMOTE: user → project
+// ============================================================================
+program
+  .command("demote <name>")
+  .description("Move setting from ~/.claude (user) → .claude (project)")
+  .option("-f, --force", "Overwrite if exists")
+  .option("-r, --rename <newname>", "Rename to avoid conflict")
+  .action(async (name, options) => {
+    try {
+      showBanner();
+      console.log(chalk.cyan(`  📥 Demoting: ${name}\n`));
+      console.log(chalk.dim(`  From: ~/.claude (user)`));
+      console.log(chalk.dim(`  To:   .claude (project)\n`));
+      
+      const result = await demoteItem(name, {
+        force: options.force,
+        rename: options.rename
+      });
+      
+      if (result.renamed) {
+        console.log(chalk.yellow(`  ⚠ Renamed: ${result.originalName} → ${result.newName}`));
+      }
+      
+      console.log(chalk.dim(`  ✓ ${result.item.type}: ${result.newName}`));
+      console.log(chalk.dim(`  Now project-specific!\n`));
+      
+      showSuccess('Demote Complete!');
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// SCOPES: Compare user and project settings
+// ============================================================================
+program
+  .command("scopes")
+  .description("Compare settings in user (~/.claude) and project (.claude)")
+  .action(async () => {
+    try {
+      showBanner();
+      console.log(chalk.cyan('  👁 Comparing Scopes\n'));
+      
+      const { project, user } = await listBothScopes();
+      
+      // User level
+      console.log(chalk.white.bold('  📁 User (~/.claude)'));
+      if (user.length === 0) {
+        console.log(chalk.dim('     (empty)'));
+      } else {
+        for (const item of user) {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          console.log(chalk.dim(`     ${icon} ${item.name}`));
+        }
+      }
+      console.log();
+      
+      // Project level
+      console.log(chalk.white.bold('  📁 Project (.claude)'));
+      if (project.length === 0) {
+        console.log(chalk.dim('     (empty)'));
+      } else {
+        for (const item of project) {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          console.log(chalk.dim(`     ${icon} ${item.name}`));
+        }
+      }
+      console.log();
+      
+      console.log(chalk.dim('  Commands:'));
+      console.log(chalk.dim('    clsync promote <name>  # project → user'));
+      console.log(chalk.dim('    clsync demote <name>   # user → project\n'));
+      
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
 program.parse();
+

@@ -576,3 +576,193 @@ export async function isClsyncRepo(repoUrl) {
   return metadata !== null;
 }
 
+// =============================================================================
+// PROMOTE / DEMOTE
+// =============================================================================
+
+/**
+ * Get user Claude dir
+ */
+function getUserClaudeDir() {
+  return join(os.homedir(), '.claude');
+}
+
+/**
+ * Get project Claude dir
+ */
+function getProjectClaudeDir() {
+  return join(process.cwd(), '.claude');
+}
+
+/**
+ * Check if item exists in target
+ */
+async function itemExistsInTarget(name, type, targetDir) {
+  const items = await scanItems(targetDir);
+  return items.find(i => i.name === name && i.type === type);
+}
+
+/**
+ * Generate unique name if conflict
+ */
+async function getUniqueName(name, type, targetDir) {
+  let newName = name;
+  let counter = 1;
+  
+  while (await itemExistsInTarget(newName, type, targetDir)) {
+    newName = `${name}-${counter}`;
+    counter++;
+  }
+  
+  return newName;
+}
+
+/**
+ * Promote: Move from project (.claude) → user (~/.claude)
+ * Makes setting available globally
+ */
+export async function promoteItem(itemName, options = {}) {
+  const { rename, force = false } = options;
+  
+  const projectDir = getProjectClaudeDir();
+  const userDir = getUserClaudeDir();
+  
+  // Find item in project
+  const projectItems = await scanItems(projectDir);
+  const item = projectItems.find(i => i.name === itemName);
+  
+  if (!item) {
+    throw new Error(`Item "${itemName}" not found in project (.claude)`);
+  }
+  
+  // Check for conflict in user
+  const existingInUser = await itemExistsInTarget(itemName, item.type, userDir);
+  let targetName = rename || itemName;
+  
+  if (existingInUser && !force && !rename) {
+    const suggestedName = await getUniqueName(itemName, item.type, userDir);
+    throw new Error(
+      `"${itemName}" already exists in ~/.claude.\n\n` +
+      `Options:\n` +
+      `  --force    Overwrite existing\n` +
+      `  --rename   Rename to avoid conflict (suggested: "${suggestedName}")`
+    );
+  }
+  
+  // Determine paths
+  const sourcePath = join(projectDir, item.path);
+  let targetPath;
+  
+  if (item.type === 'skill') {
+    targetPath = join(userDir, 'skills', targetName);
+  } else if (item.type === 'agent') {
+    targetPath = join(userDir, 'agents', `${targetName}.md`);
+  } else {
+    targetPath = join(userDir, 'output-styles', `${targetName}.md`);
+  }
+  
+  // Copy to user
+  await mkdir(dirname(targetPath), { recursive: true });
+  
+  if (item.type === 'skill') {
+    await cp(sourcePath, targetPath, { recursive: true });
+  } else {
+    const content = await readFile(sourcePath, 'utf-8');
+    await writeFile(targetPath, content, 'utf-8');
+  }
+  
+  // Remove from project
+  await rm(sourcePath, { recursive: true, force: true });
+  
+  return {
+    item,
+    from: '.claude',
+    to: '~/.claude',
+    originalName: itemName,
+    newName: targetName,
+    renamed: targetName !== itemName
+  };
+}
+
+/**
+ * Demote: Move from user (~/.claude) → project (.claude)
+ * Makes setting project-specific
+ */
+export async function demoteItem(itemName, options = {}) {
+  const { rename, force = false } = options;
+  
+  const projectDir = getProjectClaudeDir();
+  const userDir = getUserClaudeDir();
+  
+  // Find item in user
+  const userItems = await scanItems(userDir);
+  const item = userItems.find(i => i.name === itemName);
+  
+  if (!item) {
+    throw new Error(`Item "${itemName}" not found in user (~/.claude)`);
+  }
+  
+  // Check for conflict in project
+  const existingInProject = await itemExistsInTarget(itemName, item.type, projectDir);
+  let targetName = rename || itemName;
+  
+  if (existingInProject && !force && !rename) {
+    const suggestedName = await getUniqueName(itemName, item.type, projectDir);
+    throw new Error(
+      `"${itemName}" already exists in .claude.\n\n` +
+      `Options:\n` +
+      `  --force    Overwrite existing\n` +
+      `  --rename   Rename to avoid conflict (suggested: "${suggestedName}")`
+    );
+  }
+  
+  // Determine paths
+  const sourcePath = join(userDir, item.path);
+  let targetPath;
+  
+  if (item.type === 'skill') {
+    targetPath = join(projectDir, 'skills', targetName);
+  } else if (item.type === 'agent') {
+    targetPath = join(projectDir, 'agents', `${targetName}.md`);
+  } else {
+    targetPath = join(projectDir, 'output-styles', `${targetName}.md`);
+  }
+  
+  // Copy to project
+  await mkdir(dirname(targetPath), { recursive: true });
+  
+  if (item.type === 'skill') {
+    await cp(sourcePath, targetPath, { recursive: true });
+  } else {
+    const content = await readFile(sourcePath, 'utf-8');
+    await writeFile(targetPath, content, 'utf-8');
+  }
+  
+  // Remove from user
+  await rm(sourcePath, { recursive: true, force: true });
+  
+  return {
+    item,
+    from: '~/.claude',
+    to: '.claude',
+    originalName: itemName,
+    newName: targetName,
+    renamed: targetName !== itemName
+  };
+}
+
+/**
+ * List items in both scopes for comparison
+ */
+export async function listBothScopes() {
+  const projectDir = getProjectClaudeDir();
+  const userDir = getUserClaudeDir();
+  
+  const projectItems = await scanItems(projectDir);
+  const userItems = await scanItems(userDir);
+  
+  return {
+    project: projectItems,
+    user: userItems
+  };
+}

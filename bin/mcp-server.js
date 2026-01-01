@@ -507,7 +507,10 @@ import {
   applyItem,
   applyAll,
   listRepoItems,
-  listPulledRepos
+  listPulledRepos,
+  promoteItem,
+  demoteItem,
+  listBothScopes
 } from "../src/repo-sync.js";
 
 server.tool(
@@ -684,6 +687,112 @@ server.tool(
         text += `   Last pulled: ${repo.last_pulled}\n`;
       }
 
+      return { content: [{ type: "text", text }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "promote_setting",
+  "Move setting from .claude (project) → ~/.claude (user) for global access",
+  {
+    name: {
+      type: "string",
+      description: "Name of the setting to promote",
+    },
+    force: {
+      type: "boolean",
+      description: "Overwrite if exists in target",
+    },
+    rename: {
+      type: "string",
+      description: "New name to avoid conflict",
+    },
+  },
+  async ({ name, force = false, rename }) => {
+    try {
+      const result = await promoteItem(name, { force, rename });
+      let text = `✅ Promoted ${result.item.type}: ${result.newName}\n\n`;
+      text += `From: .claude (project)\n`;
+      text += `To: ~/.claude (user)\n\n`;
+      if (result.renamed) {
+        text += `⚠ Renamed: ${result.originalName} → ${result.newName}\n`;
+      }
+      text += `Now available globally!`;
+      return { content: [{ type: "text", text }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "demote_setting",
+  "Move setting from ~/.claude (user) → .claude (project) for project-specific use",
+  {
+    name: {
+      type: "string",
+      description: "Name of the setting to demote",
+    },
+    force: {
+      type: "boolean",
+      description: "Overwrite if exists in target",
+    },
+    rename: {
+      type: "string",
+      description: "New name to avoid conflict",
+    },
+  },
+  async ({ name, force = false, rename }) => {
+    try {
+      const result = await demoteItem(name, { force, rename });
+      let text = `✅ Demoted ${result.item.type}: ${result.newName}\n\n`;
+      text += `From: ~/.claude (user)\n`;
+      text += `To: .claude (project)\n\n`;
+      if (result.renamed) {
+        text += `⚠ Renamed: ${result.originalName} → ${result.newName}\n`;
+      }
+      text += `Now project-specific!`;
+      return { content: [{ type: "text", text }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "compare_scopes",
+  "Compare settings in user (~/.claude) and project (.claude) scopes",
+  {},
+  async () => {
+    try {
+      const { project, user } = await listBothScopes();
+      
+      let text = "👁 Comparing Scopes\n\n";
+      
+      text += "📁 User (~/.claude):\n";
+      if (user.length === 0) {
+        text += "   (empty)\n";
+      } else {
+        for (const item of user) {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          text += `   ${icon} ${item.name}\n`;
+        }
+      }
+      
+      text += "\n📁 Project (.claude):\n";
+      if (project.length === 0) {
+        text += "   (empty)\n";
+      } else {
+        for (const item of project) {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          text += `   ${icon} ${item.name}\n`;
+        }
+      }
+      
+      text += "\nUse promote_setting or demote_setting to move items between scopes.";
       return { content: [{ type: "text", text }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
