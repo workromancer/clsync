@@ -525,16 +525,19 @@ async function scopesInteractive() {
 }
 
 async function backToMenu() {
-  const { back } = await inquirer.prompt([
+  const { action } = await inquirer.prompt([
     {
-      type: 'confirm',
-      name: 'back',
-      message: 'Back to menu?',
-      default: true
+      type: 'rawlist',
+      name: 'action',
+      message: 'What next?',
+      choices: [
+        { name: '← Back to menu', value: 'menu' },
+        { name: '👋 Exit', value: 'exit' }
+      ]
     }
   ]);
   
-  if (back) {
+  if (action === 'menu') {
     await interactiveMode(false);
   } else {
     exitAltScreen();
