@@ -1,5 +1,16 @@
 # CLSYNC
 
+<p align="center">
+  <img src="https://img.shields.io/npm/v/clsync?style=flat-square&color=00A67E" alt="npm version">
+  <img src="https://img.shields.io/npm/l/clsync?style=flat-square" alt="license">
+  <img src="https://img.shields.io/node/v/clsync?style=flat-square" alt="node version">
+  <img src="https://img.shields.io/badge/Claude_Code-MCP-blueviolet?style=flat-square" alt="MCP">
+</p>
+
+<p align="center">
+  <b>🔄 Sync your Claude Code environment across machines</b>
+</p>
+
 ```
   ┌───────────────────────────────────────┐
   │  CLSYNC                              │
@@ -7,8 +18,10 @@
   └───────────────────────────────────────┘
 ```
 
-🔄 여러 컴퓨터에서 Claude Code 환경을 동기화합니다.
+여러 컴퓨터에서 Claude Code 환경을 동기화합니다.
 문서, skills, subagents, output styles를 한 곳에서 관리하세요.
+
+---
 
 ## ✨ 주요 기능
 
@@ -249,6 +262,10 @@ downloaded_at: 2026-01-01T03:46:22.704Z
 - MCP 서버로 Claude에서 직접 스킬/에이전트 생성
 - 문서 기반 개발 워크플로우
 
+## 🤝 기여
+
+Pull Request와 Issue는 언제나 환영합니다!
+
 ## 📜 라이선스
 
-MIT
+[MIT](LICENSE) © 2026 workromancer

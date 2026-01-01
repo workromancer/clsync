@@ -12,6 +12,14 @@
     "mcp": "node bin/mcp-server.js",
     "test": "node --test src/**/*.test.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/workromancer/clsync.git"
+  },
+  "homepage": "https://github.com/workromancer/clsync#readme",
+  "bugs": {
+    "url": "https://github.com/workromancer/clsync/issues"
+  },
   "keywords": [
     "claude",
     "claude-code",
@@ -21,9 +29,10 @@
     "mcp",
     "model-context-protocol",
     "environment",
-    "dotfiles"
+    "dotfiles",
+    "cli"
   ],
-  "author": "",
+  "author": "workromancer",
   "license": "MIT",
   "type": "module",
   "engines": {

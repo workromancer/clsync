@@ -1,0 +1,17 @@
+# Development files
+.gitignore
+.git/
+
+# Test files
+*.test.js
+coverage/
+
+# Config files
+.vscode/
+.idea/
+
+# Documentation
+docs/
+
+# Example outputs
+claude/
