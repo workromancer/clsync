@@ -43,13 +43,13 @@ ${chalk.cyan('  ██║     ██║     ╚════██║  ╚██�
 ${chalk.cyan('  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗')}
 ${chalk.cyan('   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝')}
 ${chalk.dim('  ───────────────────────────────────────────────────')}
-${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.1')}
+${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.0')}
 `;
 
 // Compact banner (for 40-54 columns)
 const bannerCompact = `
 ${chalk.cyan.bold('  ╔═══════════════════════════╗')}
-${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.1')}      ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.0')}      ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ║')}  ${chalk.dim('Claude Code Sync')}        ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ╚═══════════════════════════╝')}
 `;
@@ -525,19 +525,16 @@ async function scopesInteractive() {
 }
 
 async function backToMenu() {
-  const { action } = await inquirer.prompt([
+  const { back } = await inquirer.prompt([
     {
-      type: 'rawlist',
-      name: 'action',
-      message: 'What next?',
-      choices: [
-        { name: '← Back to menu', value: 'menu' },
-        { name: '👋 Exit', value: 'exit' }
-      ]
+      type: 'confirm',
+      name: 'back',
+      message: 'Back to menu?',
+      default: true
     }
   ]);
   
-  if (action === 'menu') {
+  if (back) {
     await interactiveMode(false);
   } else {
     exitAltScreen();
@@ -566,7 +563,7 @@ if (args.length === 0) {
 program
   .name("clsync")
   .description("Sync Claude Code settings via ~/.clsync staging area")
-  .version("0.2.1");
+  .version("0.2.0");
 
 // ============================================================================
 // INIT
