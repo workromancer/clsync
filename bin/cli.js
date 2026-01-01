@@ -172,15 +172,26 @@ program
 // ============================================================================
 program
   .command("apply [name]")
-  .description("Apply item from ~/.clsync to ~/.claude or .claude")
+  .description("Apply item from ~/.clsync to ~/.claude, .claude, or custom directory")
   .option("-u, --user", "To ~/.claude (default)")
-  .option("-p, --project", "To .claude")
+  .option("-p, --project", "To .claude (current directory)")
+  .option("-d, --dir <path>", "To custom directory (e.g., /path/to/project/.claude)")
   .option("-a, --all", "Apply all staged items")
   .action(async (name, options) => {
     try {
       showBanner();
-      const scope = options.project ? "project" : "user";
-      const destLabel = scope === 'project' ? '.claude' : '~/.claude';
+      
+      let destLabel, scope;
+      if (options.dir) {
+        destLabel = options.dir;
+        scope = { custom: options.dir };
+      } else if (options.project) {
+        destLabel = '.claude';
+        scope = 'project';
+      } else {
+        destLabel = '~/.claude';
+        scope = 'user';
+      }
       
       if (options.all) {
         console.log(chalk.cyan(`  📥 Applying all to ${destLabel}...\n`));

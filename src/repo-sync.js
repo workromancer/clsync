@@ -45,8 +45,12 @@ export async function initClsync() {
 
 /**
  * Get Claude directory based on scope
+ * @param {string|{custom: string}} scope - 'user', 'project', or {custom: '/path'}
  */
 function getClaudeDir(scope = 'user') {
+  if (typeof scope === 'object' && scope.custom) {
+    return scope.custom;
+  }
   if (scope === 'project') {
     return join(process.cwd(), '.claude');
   }
