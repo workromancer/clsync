@@ -24,7 +24,9 @@ import {
   listRepoItems,
   promoteItem,
   demoteItem,
-  listBothScopes
+  listBothScopes,
+  fetchOnlineRepoList,
+  pullOnlineRepo
 } from "../src/repo-sync.js";
 
 // Get terminal width
@@ -41,20 +43,20 @@ ${chalk.cyan('  ██║     ██║     ╚════██║  ╚██�
 ${chalk.cyan('  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗')}
 ${chalk.cyan('   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝')}
 ${chalk.dim('  ───────────────────────────────────────────────────')}
-${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.1.0-beta')}
+${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.1.3-beta')}
 `;
 
 // Compact banner (for 40-54 columns)
 const bannerCompact = `
 ${chalk.cyan.bold('  ╔═══════════════════════════╗')}
-${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.1.0-beta')}      ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.1.3-beta')}      ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ║')}  ${chalk.dim('Claude Code Sync')}        ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ╚═══════════════════════════╝')}
 `;
 
 // Minimal banner (for <40 columns)
 const bannerMinimal = `
-${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v0.1.0-beta')}
+${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v0.1.3-beta')}
 ${chalk.dim('Claude Code Sync')}
 `;
 
@@ -99,8 +101,38 @@ ${chalk.dim('  ' + msg)}
 // Interactive mode imports
 import inquirer from 'inquirer';
 
+// Alternate screen mode (like vim, less)
+const enterAltScreen = () => process.stdout.write('\x1b[?1049h\x1b[H');
+const exitAltScreen = () => process.stdout.write('\x1b[?1049l');
+const clearScreen = () => process.stdout.write('\x1b[2J\x1b[H');
+const hideCursor = () => process.stdout.write('\x1b[?25l');
+const showCursor = () => process.stdout.write('\x1b[?25h');
+
+// Cleanup on exit
+function setupExitHandlers() {
+  const cleanup = () => {
+    showCursor();
+    exitAltScreen();
+  };
+  
+  process.on('exit', cleanup);
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    cleanup();
+    process.exit(0);
+  });
+}
+
 // Interactive mode function
-async function interactiveMode() {
+async function interactiveMode(isFirstRun = true) {
+  if (isFirstRun) {
+    enterAltScreen();
+    setupExitHandlers();
+  }
+  clearScreen();
   showBanner();
   
   // Get current status
@@ -121,6 +153,7 @@ async function interactiveMode() {
         { name: '📦 Browse pulled repositories', value: 'repos' },
         { name: '📥 Apply items from repo', value: 'apply' },
         { name: '🔍 Pull new repository', value: 'pull' },
+        { name: '🌐 Browse online repositories', value: 'online' },
         { name: '🔀 Compare scopes (user vs project)', value: 'scopes' },
         { name: '❓ Help', value: 'help' },
         { name: '👋 Exit', value: 'exit' }
@@ -141,6 +174,9 @@ async function interactiveMode() {
     case 'pull':
       await pullInteractive();
       break;
+    case 'online':
+      await browseOnlineInteractive();
+      break;
     case 'scopes':
       await scopesInteractive();
       break;
@@ -148,6 +184,8 @@ async function interactiveMode() {
       program.help();
       break;
     case 'exit':
+      exitAltScreen();
+      showCursor();
       console.log(chalk.dim('\n  Bye! 👋\n'));
       process.exit(0);
   }
@@ -373,6 +411,89 @@ async function pullInteractive() {
   await backToMenu();
 }
 
+async function browseOnlineInteractive() {
+  console.log(chalk.cyan('\n  🌐 Browse Online Repositories\n'));
+  
+  const spinner = ora('Fetching online repository list...').start();
+  
+  try {
+    const repos = await fetchOnlineRepoList();
+    spinner.stop();
+    
+    if (repos.length === 0) {
+      console.log(chalk.yellow('  No repositories found online.\n'));
+      await backToMenu();
+      return;
+    }
+    
+    console.log(chalk.dim(`  Found ${repos.length} repositories:\n`));
+    
+    const { selectedRepo } = await inquirer.prompt([
+      {
+        type: 'rawlist',
+        name: 'selectedRepo',
+        message: 'Select a repository to pull:',
+        choices: [
+          ...repos.map(r => ({
+            name: `📦 ${r.name} - ${chalk.dim(r.description || 'No description')}`,
+            value: r,
+            short: r.name
+          })),
+          new inquirer.Separator(),
+          { name: '← Back to menu', value: null }
+        ],
+        pageSize: 10
+      }
+    ]);
+    
+    if (!selectedRepo) {
+      await interactiveMode();
+      return;
+    }
+    
+    // Show repo details and confirm
+    console.log(chalk.cyan(`\n  📦 ${selectedRepo.name}\n`));
+    console.log(chalk.dim(`  URL:         ${selectedRepo.url}`));
+    console.log(chalk.dim(`  Source:      ${selectedRepo.source || 'N/A'}`));
+    console.log(chalk.dim(`  Description: ${selectedRepo.description || 'N/A'}`));
+    console.log(chalk.dim(`  Added:       ${selectedRepo.addedAt || 'N/A'}\n`));
+    
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: `Pull this repository to ~/.clsync?`,
+        default: true
+      }
+    ]);
+    
+    if (confirm) {
+      console.log();
+      const pullSpinner = ora('Pulling from GitHub...').start();
+      
+      try {
+        const results = await pullOnlineRepo(selectedRepo, { force: false });
+        pullSpinner.succeed(`Downloaded ${results.downloaded} files to ~/.clsync/repos/${results.repoPath}`);
+        
+        showSuccess('Pull Complete!');
+        
+        // Redirect to browse pulled repos
+        console.log(chalk.dim('  Opening pulled repositories...\n'));
+        await browseReposInteractive();
+        return;
+      } catch (error) {
+        pullSpinner.fail('Pull failed');
+        showError(error.message);
+      }
+    }
+  } catch (error) {
+    spinner.fail('Failed to fetch online repositories');
+    showError(error.message);
+  }
+  
+  await backToMenu();
+}
+
 async function scopesInteractive() {
   const { project, user } = await listBothScopes();
   
@@ -414,9 +535,10 @@ async function backToMenu() {
   ]);
   
   if (back) {
-    console.clear();
-    await interactiveMode();
+    await interactiveMode(false);
   } else {
+    exitAltScreen();
+    showCursor();
     console.log(chalk.dim('\n  Bye! 👋\n'));
   }
 }
@@ -762,6 +884,42 @@ program
       }
       
       console.log(chalk.dim(`  Use: clsync pull ${repo}\n`));
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// ONLINE (Browse online repository registry)
+// ============================================================================
+program
+  .command("online")
+  .description("Browse and pull from online repository registry")
+  .action(async () => {
+    try {
+      console.log(chalk.cyan('  🌐 Online Repository Registry\n'));
+      
+      const spinner = ora('Fetching online repository list...').start();
+      const repos = await fetchOnlineRepoList();
+      spinner.stop();
+      
+      if (repos.length === 0) {
+        console.log(chalk.yellow('  No repositories found.\n'));
+        return;
+      }
+      
+      console.log(chalk.dim(`  Found ${repos.length} repositories:\n`));
+      
+      for (const repo of repos) {
+        console.log(chalk.white.bold(`  📦 ${repo.name}`));
+        console.log(chalk.dim(`     ${repo.description || 'No description'}`));
+        console.log(chalk.dim(`     URL: ${repo.url}`));
+        console.log(chalk.dim(`     Source: ${repo.source || 'N/A'}`));
+        console.log();
+      }
+      
+      console.log(chalk.dim('  To pull a repository interactively, run: clsync\n'));
     } catch (error) {
       showError(error.message);
       process.exit(1);

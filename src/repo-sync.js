@@ -797,3 +797,85 @@ export async function listBothScopes() {
     user: userItems,
   };
 }
+
+// =============================================================================
+// ONLINE REPOSITORY REGISTRY
+// =============================================================================
+
+const ONLINE_REPOS_URL = "https://raw.githubusercontent.com/workromancer/clsync-repos/refs/heads/main/repos.yaml";
+
+/**
+ * Parse simple YAML for repos.yaml format
+ */
+function parseReposYaml(yamlContent) {
+  const repos = [];
+  const lines = yamlContent.split('\n');
+  let currentRepo = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Skip comments and empty lines
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+    
+    // New repo entry
+    if (trimmed === '- name:' || trimmed.startsWith('- name:')) {
+      if (currentRepo) repos.push(currentRepo);
+      currentRepo = {};
+      const value = trimmed.replace('- name:', '').trim();
+      if (value) currentRepo.name = value;
+    } else if (currentRepo) {
+      // Parse key: value
+      const match = trimmed.match(/^-?\s*(\w+):\s*(.*)$/);
+      if (match) {
+        const [, key, rawValue] = match;
+        // Remove quotes if present
+        let value = rawValue.trim();
+        if ((value.startsWith('"') && value.endsWith('"')) || 
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        currentRepo[key] = value;
+      }
+    }
+  }
+  
+  if (currentRepo) repos.push(currentRepo);
+  
+  return repos;
+}
+
+/**
+ * Fetch online repository list from clsync-repos
+ */
+export async function fetchOnlineRepoList() {
+  const response = await fetch(ONLINE_REPOS_URL, {
+    headers: { "User-Agent": "clsync" }
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch online repo list: ${response.status}`);
+  }
+  
+  const yamlContent = await response.text();
+  return parseReposYaml(yamlContent);
+}
+
+/**
+ * Pull an online repo to ~/.clsync/repos
+ */
+export async function pullOnlineRepo(repoInfo, options = {}) {
+  // repoInfo has: name, url, source, description, addedAt
+  // Use the url field which is the forked/clsync-ready version
+  const repoUrl = repoInfo.url;
+  
+  // Extract owner/repo from URL
+  const urlMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+  if (!urlMatch) {
+    throw new Error(`Invalid repository URL: ${repoUrl}`);
+  }
+  
+  const repoPath = `${urlMatch[1]}/${urlMatch[2]}`;
+  
+  return await pullFromGitHub(repoPath, options);
+}
