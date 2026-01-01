@@ -497,6 +497,103 @@ server.tool(
 );
 
 // =============================================================================
+// Repository Sync Tools
+// =============================================================================
+
+import { pullSettings, listLocalSettings } from "../src/repo-sync.js";
+
+server.tool(
+  "pull_settings",
+  "Pull Claude Code settings (skills, agents, output-styles) from a GitHub repository",
+  {
+    repo: {
+      type: "string",
+      description: 'GitHub repository (e.g., "owner/repo" or full URL)',
+    },
+    scope: {
+      type: "string",
+      description: '"user" (~/.claude) or "project" (.claude)',
+      enum: ["user", "project"],
+    },
+    force: {
+      type: "boolean",
+      description: "Force overwrite existing files",
+    },
+  },
+  async ({ repo, scope = "user", force = false }) => {
+    try {
+      const results = await pullSettings(repo, { scope, force, dryRun: false });
+
+      const summary = `Downloaded ${results.downloaded} files` +
+        (results.skipped > 0 ? `, skipped ${results.skipped} existing` : "") +
+        (results.failed > 0 ? `, ${results.failed} failed` : "");
+
+      const fileList = results.files
+        .map((f) => `${f.status === "downloaded" ? "✓" : "○"} ${f.path}`)
+        .join("\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Pull Complete!\n\n${summary}\n\nFiles:\n${fileList}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "list_local_settings",
+  "List local Claude Code settings (skills, agents, output-styles)",
+  {
+    scope: {
+      type: "string",
+      description: '"user" or "project"',
+      enum: ["user", "project"],
+    },
+  },
+  async ({ scope = "user" }) => {
+    try {
+      const files = await listLocalSettings(scope);
+
+      if (files.length === 0) {
+        return {
+          content: [{ type: "text", text: "No local settings found." }],
+        };
+      }
+
+      const grouped = {};
+      for (const file of files) {
+        if (!grouped[file.dir]) grouped[file.dir] = [];
+        grouped[file.dir].push(file.path.replace(file.dir + "/", ""));
+      }
+
+      let text = `📋 Local settings (${files.length} files):\n\n`;
+      for (const [dir, items] of Object.entries(grouped)) {
+        text += `${dir}/\n`;
+        for (const item of items) {
+          text += `  - ${item}\n`;
+        }
+      }
+
+      return { content: [{ type: "text", text }] };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// =============================================================================
 // Resource Registration
 // =============================================================================
 
@@ -522,3 +619,4 @@ async function main() {
 }
 
 main().catch(console.error);
+

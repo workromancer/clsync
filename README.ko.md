@@ -50,20 +50,19 @@ npx clsync
 ### CLI 사용
 
 ```bash
-# 기본 실행 (문서를 ~/.claude/clsync에 저장)
-npx clsync
+# 문서 동기화 (기본 명령)
+npx clsync                    # ~/.claude/clsync에 저장
+npx clsync -p                 # .claude/clsync에 저장
 
-# 프로젝트 폴더에 저장 (.claude/clsync)
-npx clsync -p
+# GitHub 리포지토리에서 설정 가져오기
+npx clsync pull owner/repo    # skills, agents, output-styles 가져오기
+npx clsync pull owner/repo -p # 프로젝트에 저장
 
-# 미리보기 (실제 다운로드 X)
-npx clsync --dry-run
+# 로컬 설정 목록 보기
+npx clsync list
 
-# 상세 로그 + 큰 배너
-npx clsync --verbose
-
-# 기존 파일 덮어쓰기
-npx clsync --force
+# 설정 내보내기 (git push용)
+npx clsync export ./my-settings
 ```
 
 ### MCP 서버로 사용
@@ -73,21 +72,29 @@ npx clsync --force
 claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```
 
-## 📖 CLI 옵션
+## 📖 CLI 명령어
 
-```
-Usage: clsync [options]
+### `clsync sync` (기본)
 
-Options:
-  -V, --version        버전 출력
-  -c, --config <path>  설정 파일 경로 (기본: clsync.config.json)
-  -u, --user           ~/.claude/clsync에 저장 (기본값)
-  -p, --project        .claude/clsync에 저장 (현재 디렉터리)
-  -v, --verbose        상세 로그 출력
-  -d, --dry-run        실제 다운로드 없이 미리보기
-  -f, --force          기존 파일 덮어쓰기
-  -h, --help           도움말 출력
+설정된 소스에서 문서를 동기화합니다.
+
+### `clsync pull <repo>`
+
+GitHub 리포지토리에서 설정을 가져옵니다.
+
+```bash
+clsync pull owner/repo        # skills/, agents/, output-styles/ 가져오기
+clsync pull owner/repo -p     # 프로젝트에 저장
+clsync pull owner/repo -f     # 기존 파일 덮어쓰기
 ```
+
+### `clsync list`
+
+로컬 Claude Code 설정을 목록으로 보여줍니다.
+
+### `clsync export <dir>`
+
+설정을 디렉터리로 내보냅니다 (git push용).
 
 ### 스코프 옵션
 

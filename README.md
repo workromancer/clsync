@@ -50,20 +50,19 @@ npx clsync
 ### CLI Usage
 
 ```bash
-# Default (saves to ~/.claude/clsync)
-npx clsync
+# Sync docs (default command)
+npx clsync                    # saves to ~/.claude/clsync
+npx clsync -p                 # saves to .claude/clsync
 
-# Save to project folder (.claude/clsync)
-npx clsync -p
+# Pull settings from GitHub repo
+npx clsync pull owner/repo    # pull skills, agents, output-styles
+npx clsync pull owner/repo -p # save to project
 
-# Dry run (no actual download)
-npx clsync --dry-run
+# List local settings
+npx clsync list
 
-# Verbose mode with large banner
-npx clsync --verbose
-
-# Force overwrite existing files
-npx clsync --force
+# Export settings for git push
+npx clsync export ./my-settings
 ```
 
 ### Use as MCP Server
@@ -71,6 +70,54 @@ npx clsync --force
 ```bash
 # Register MCP server with Claude Code
 claude mcp add clsync --transport stdio -- npx -y clsync-mcp
+```
+
+## 📖 CLI Commands
+
+### `clsync sync` (default)
+
+Sync documentation from configured sources.
+
+```bash
+clsync [sync] [options]
+  -c, --config <path>  Config file (default: clsync.config.json)
+  -u, --user           Save to ~/.claude/clsync (default)
+  -p, --project        Save to .claude/clsync
+  -v, --verbose        Verbose output
+  -d, --dry-run        Preview without changes
+  -f, --force          Overwrite existing
+```
+
+### `clsync pull <repo>`
+
+Pull settings from a GitHub repository.
+
+```bash
+clsync pull <owner/repo> [options]
+  -u, --user           Save to ~/.claude (default)
+  -p, --project        Save to .claude
+  -f, --force          Overwrite existing
+  -d, --dry-run        Preview
+```
+
+### `clsync list`
+
+List local Claude Code settings.
+
+```bash
+clsync list [options]
+  -u, --user           List from ~/.claude (default)
+  -p, --project        List from .claude
+```
+
+### `clsync export <dir>`
+
+Export settings to a directory for git push.
+
+```bash
+clsync export <directory> [options]
+  -u, --user           Export from ~/.claude (default)
+  -p, --project        Export from .claude
 ```
 
 ## 📖 CLI Options
@@ -187,6 +234,13 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 | --------------------- | ------------------------- |
 | `create_output_style` | Create a new output style |
 | `list_output_styles`  | List all output styles    |
+
+#### 🔄 Repository Sync Tools
+
+| Tool                  | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `pull_settings`       | Pull settings from a GitHub repository              |
+| `list_local_settings` | List local settings (skills, agents, output-styles) |
 
 ### Usage Examples in Claude Code
 
