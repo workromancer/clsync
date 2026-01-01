@@ -1,6 +1,6 @@
 /**
  * CLSYNC - Claude Code Settings Sync
- * 
+ *
  * Architecture:
  * ~/.clsync/
  *   ├── manifest.json
@@ -9,16 +9,21 @@
  *       └── owner/repo/
  */
 
-import { mkdir, writeFile, readdir, stat, readFile, cp, rm } from 'fs/promises';
-import { join, dirname, basename } from 'path';
-import { existsSync } from 'fs';
-import os from 'os';
+import { mkdir, writeFile, readdir, stat, readFile, cp, rm } from "fs/promises";
+import { join, dirname, basename } from "path";
+import { existsSync } from "fs";
+import os from "os";
 
-const SETTINGS_DIRS = ['skills', 'agents', 'output-styles'];
-const CLSYNC_DIR = join(os.homedir(), '.clsync');
-const LOCAL_DIR = join(CLSYNC_DIR, 'local');
-const REPOS_DIR = join(CLSYNC_DIR, 'repos');
-const MANIFEST_FILE = join(CLSYNC_DIR, 'manifest.json');
+const SETTINGS_DIRS = ["skills", "agents", "output-styles"];
+const CLSYNC_DIR = join(os.homedir(), ".clsync");
+const LOCAL_DIR = join(CLSYNC_DIR, "local");
+const REPOS_DIR = join(CLSYNC_DIR, "repos");
+const MANIFEST_FILE = join(CLSYNC_DIR, "manifest.json");
+
+// Project-local .clsync directory (for project-specific shared settings)
+function getProjectClsyncDir() {
+  return join(process.cwd(), ".clsync");
+}
 
 /**
  * Initialize ~/.clsync directory
@@ -27,16 +32,16 @@ export async function initClsync() {
   await mkdir(CLSYNC_DIR, { recursive: true });
   await mkdir(LOCAL_DIR, { recursive: true });
   await mkdir(REPOS_DIR, { recursive: true });
-  
+
   for (const dir of SETTINGS_DIRS) {
     await mkdir(join(LOCAL_DIR, dir), { recursive: true });
   }
-  
+
   if (!existsSync(MANIFEST_FILE)) {
     await saveManifest({
-      version: '1.0.0',
+      version: "1.0.0",
       repos: {},
-      last_updated: new Date().toISOString()
+      last_updated: new Date().toISOString(),
     });
   }
 }
@@ -44,14 +49,14 @@ export async function initClsync() {
 /**
  * Get Claude directory based on scope
  */
-function getClaudeDir(scope = 'user') {
-  if (typeof scope === 'object' && scope.custom) {
+function getClaudeDir(scope = "user") {
+  if (typeof scope === "object" && scope.custom) {
     return scope.custom;
   }
-  if (scope === 'project') {
-    return join(process.cwd(), '.claude');
+  if (scope === "project") {
+    return join(process.cwd(), ".claude");
   }
-  return join(os.homedir(), '.claude');
+  return join(os.homedir(), ".claude");
 }
 
 /**
@@ -67,10 +72,10 @@ function getRepoDir(repoUrl) {
  */
 export async function loadManifest() {
   try {
-    const content = await readFile(MANIFEST_FILE, 'utf-8');
+    const content = await readFile(MANIFEST_FILE, "utf-8");
     return JSON.parse(content);
   } catch {
-    return { version: '1.0.0', repos: {}, last_updated: null };
+    return { version: "1.0.0", repos: {}, last_updated: null };
   }
 }
 
@@ -80,7 +85,7 @@ export async function loadManifest() {
 export async function saveManifest(manifest) {
   await mkdir(CLSYNC_DIR, { recursive: true });
   manifest.last_updated = new Date().toISOString();
-  await writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2), 'utf-8');
+  await writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2), "utf-8");
 }
 
 /**
@@ -90,7 +95,7 @@ function parseMetadata(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
   const metadata = {};
-  for (const line of match[1].split('\n')) {
+  for (const line of match[1].split("\n")) {
     const m = line.match(/^(\w+):\s*(.+)$/);
     if (m) metadata[m[1]] = m[2].trim();
   }
@@ -102,46 +107,46 @@ function parseMetadata(content) {
  */
 async function scanItems(baseDir) {
   const items = [];
-  
+
   for (const dir of SETTINGS_DIRS) {
     const dirPath = join(baseDir, dir);
-    
+
     try {
       const entries = await readdir(dirPath);
-      
+
       for (const entry of entries) {
         const entryPath = join(dirPath, entry);
         const entryStat = await stat(entryPath);
-        
-        if (dir === 'skills' && entryStat.isDirectory()) {
-          const skillFile = join(entryPath, 'SKILL.md');
+
+        if (dir === "skills" && entryStat.isDirectory()) {
+          const skillFile = join(entryPath, "SKILL.md");
           try {
-            const content = await readFile(skillFile, 'utf-8');
+            const content = await readFile(skillFile, "utf-8");
             const metadata = parseMetadata(content);
             items.push({
-              type: 'skill',
+              type: "skill",
               name: entry,
               path: `skills/${entry}`,
               ...metadata,
-              updated_at: entryStat.mtime.toISOString()
+              updated_at: entryStat.mtime.toISOString(),
             });
           } catch {}
-        } else if (entryStat.isFile() && entry.endsWith('.md')) {
-          const content = await readFile(entryPath, 'utf-8');
+        } else if (entryStat.isFile() && entry.endsWith(".md")) {
+          const content = await readFile(entryPath, "utf-8");
           const metadata = parseMetadata(content);
-          const type = dir === 'agents' ? 'agent' : 'output-style';
+          const type = dir === "agents" ? "agent" : "output-style";
           items.push({
             type,
-            name: entry.replace('.md', ''),
+            name: entry.replace(".md", ""),
             path: `${dir}/${entry}`,
             ...metadata,
-            updated_at: entryStat.mtime.toISOString()
+            updated_at: entryStat.mtime.toISOString(),
           });
         }
       }
     } catch {}
   }
-  
+
   return items;
 }
 
@@ -152,42 +157,42 @@ async function scanItems(baseDir) {
 /**
  * Stage: Copy item from ~/.claude or .claude to ~/.clsync/local
  */
-export async function stageItem(itemName, scope = 'user') {
+export async function stageItem(itemName, scope = "user") {
   await initClsync();
-  
+
   const sourceDir = getClaudeDir(scope);
   const items = await scanItems(sourceDir);
-  const item = items.find(i => i.name === itemName);
-  
+  const item = items.find((i) => i.name === itemName);
+
   if (!item) {
     throw new Error(`Item "${itemName}" not found in ${scope} scope`);
   }
-  
+
   const sourcePath = join(sourceDir, item.path);
   const destPath = join(LOCAL_DIR, item.path);
-  
+
   await mkdir(dirname(destPath), { recursive: true });
-  
-  if (item.type === 'skill') {
+
+  if (item.type === "skill") {
     await cp(sourcePath, destPath, { recursive: true });
   } else {
-    const content = await readFile(sourcePath, 'utf-8');
-    await writeFile(destPath, content, 'utf-8');
+    const content = await readFile(sourcePath, "utf-8");
+    await writeFile(destPath, content, "utf-8");
   }
-  
+
   return { item, path: destPath };
 }
 
 /**
  * Stage all items from a scope
  */
-export async function stageAll(scope = 'user') {
+export async function stageAll(scope = "user") {
   await initClsync();
-  
+
   const sourceDir = getClaudeDir(scope);
   const items = await scanItems(sourceDir);
   const results = [];
-  
+
   for (const item of items) {
     try {
       const result = await stageItem(item.name, scope);
@@ -196,7 +201,7 @@ export async function stageAll(scope = 'user') {
       results.push({ item, error: e.message });
     }
   }
-  
+
   return results;
 }
 
@@ -213,15 +218,15 @@ export async function listLocalStaged() {
  */
 export async function unstageItem(itemName) {
   const items = await listLocalStaged();
-  const item = items.find(i => i.name === itemName);
-  
+  const item = items.find((i) => i.name === itemName);
+
   if (!item) {
     throw new Error(`Item "${itemName}" not found in local staging`);
   }
-  
+
   const itemPath = join(LOCAL_DIR, item.path);
   await rm(itemPath, { recursive: true, force: true });
-  
+
   return { item };
 }
 
@@ -235,55 +240,55 @@ export async function unstageItem(itemName) {
  * @param {string} scope - 'user', 'project', or { custom: '/path' }
  * @param {string} source - 'local' or 'owner/repo'
  */
-export async function applyItem(itemName, scope = 'user', source = 'local') {
+export async function applyItem(itemName, scope = "user", source = "local") {
   let sourceDir;
   let items;
-  
-  if (source === 'local') {
+
+  if (source === "local") {
     sourceDir = LOCAL_DIR;
     items = await listLocalStaged();
   } else {
     sourceDir = join(REPOS_DIR, source);
     items = await scanItems(sourceDir);
   }
-  
-  const item = items.find(i => i.name === itemName);
-  
+
+  const item = items.find((i) => i.name === itemName);
+
   if (!item) {
     throw new Error(`Item "${itemName}" not found in ${source}`);
   }
-  
+
   const sourcePath = join(sourceDir, item.path);
   const destDir = getClaudeDir(scope);
   const destPath = join(destDir, item.path);
-  
+
   await mkdir(dirname(destPath), { recursive: true });
-  
-  if (item.type === 'skill') {
+
+  if (item.type === "skill") {
     await cp(sourcePath, destPath, { recursive: true });
   } else {
-    const content = await readFile(sourcePath, 'utf-8');
-    await writeFile(destPath, content, 'utf-8');
+    const content = await readFile(sourcePath, "utf-8");
+    await writeFile(destPath, content, "utf-8");
   }
-  
+
   return { item, path: destPath, source };
 }
 
 /**
  * Apply all items from a source
  */
-export async function applyAll(scope = 'user', source = 'local') {
+export async function applyAll(scope = "user", source = "local") {
   let items;
-  
-  if (source === 'local') {
+
+  if (source === "local") {
     items = await listLocalStaged();
   } else {
     const sourceDir = join(REPOS_DIR, source);
     items = await scanItems(sourceDir);
   }
-  
+
   const results = [];
-  
+
   for (const item of items) {
     try {
       const result = await applyItem(item.name, scope, source);
@@ -292,7 +297,7 @@ export async function applyAll(scope = 'user', source = 'local') {
       results.push({ item, error: e.message });
     }
   }
-  
+
   return results;
 }
 
@@ -304,27 +309,35 @@ export async function applyAll(scope = 'user', source = 'local') {
  * Parse GitHub repo URL
  */
 export function parseRepoUrl(repo) {
-  if (repo.startsWith('http')) {
+  if (repo.startsWith("http")) {
     const url = new URL(repo);
-    const parts = url.pathname.split('/').filter(Boolean);
-    return { owner: parts[0], repo: parts[1]?.replace('.git', ''), branch: 'main' };
+    const parts = url.pathname.split("/").filter(Boolean);
+    return {
+      owner: parts[0],
+      repo: parts[1]?.replace(".git", ""),
+      branch: "main",
+    };
   }
-  const parts = repo.split('/');
-  return { owner: parts[0], repo: parts[1], branch: 'main' };
+  const parts = repo.split("/");
+  return { owner: parts[0], repo: parts[1], branch: "main" };
 }
 
 /**
  * Fetch repo tree from GitHub
  */
-async function fetchRepoTree(owner, repo, branch = 'main') {
-  const headers = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'clsync' };
-  if (process.env.GITHUB_TOKEN) headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
-  
+async function fetchRepoTree(owner, repo, branch = "main") {
+  const headers = {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "clsync",
+  };
+  if (process.env.GITHUB_TOKEN)
+    headers["Authorization"] = `token ${process.env.GITHUB_TOKEN}`;
+
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
     { headers }
   );
-  
+
   if (!response.ok) throw new Error(`GitHub API error: ${response.status}`);
   const data = await response.json();
   return data.tree || [];
@@ -335,7 +348,7 @@ async function fetchRepoTree(owner, repo, branch = 'main') {
  */
 async function fetchFileContent(owner, repo, branch, path) {
   const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
-  const response = await fetch(rawUrl, { headers: { 'User-Agent': 'clsync' } });
+  const response = await fetch(rawUrl, { headers: { "User-Agent": "clsync" } });
   if (!response.ok) throw new Error(`Failed to fetch: ${path}`);
   return response.text();
 }
@@ -346,62 +359,71 @@ async function fetchFileContent(owner, repo, branch, path) {
 export async function pullFromGitHub(repoUrl, options = {}) {
   const { force = false, onProgress } = options;
   await initClsync();
-  
+
   const { owner, repo, branch } = parseRepoUrl(repoUrl);
   const repoDir = join(REPOS_DIR, owner, repo);
-  const log = msg => onProgress && onProgress(msg);
-  
+  const log = (msg) => onProgress && onProgress(msg);
+
   log(`Fetching from ${owner}/${repo}...`);
-  
+
   // Create repo directory
   await mkdir(repoDir, { recursive: true });
   for (const dir of SETTINGS_DIRS) {
     await mkdir(join(repoDir, dir), { recursive: true });
   }
-  
+
   const tree = await fetchRepoTree(owner, repo, branch);
-  const settingsFiles = tree.filter(f => 
-    f && f.path && f.type === 'blob' && SETTINGS_DIRS.some(d => f.path.startsWith(d + '/'))
+  const settingsFiles = tree.filter(
+    (f) =>
+      f &&
+      f.path &&
+      f.type === "blob" &&
+      SETTINGS_DIRS.some((d) => f.path.startsWith(d + "/"))
   );
-  
+
   if (settingsFiles.length === 0) {
     throw new Error(
       `No clsync settings found in repository.\n\n` +
-      `This repository doesn't have the clsync directory structure:\n` +
-      `  - skills/\n` +
-      `  - agents/\n` +
-      `  - output-styles/\n\n` +
-      `Would you like to add clsync settings to this repository?`
+        `This repository doesn't have the clsync directory structure:\n` +
+        `  - skills/\n` +
+        `  - agents/\n` +
+        `  - output-styles/\n\n` +
+        `Would you like to add clsync settings to this repository?`
     );
   }
-  
-  const results = { downloaded: 0, skipped: 0, files: [], repoPath: `${owner}/${repo}` };
-  
+
+  const results = {
+    downloaded: 0,
+    skipped: 0,
+    files: [],
+    repoPath: `${owner}/${repo}`,
+  };
+
   for (const file of settingsFiles) {
     const targetPath = join(repoDir, file.path);
-    
+
     if (!force && existsSync(targetPath)) {
       results.skipped++;
       continue;
     }
-    
+
     await mkdir(dirname(targetPath), { recursive: true });
     const content = await fetchFileContent(owner, repo, branch, file.path);
-    await writeFile(targetPath, content, 'utf-8');
+    await writeFile(targetPath, content, "utf-8");
     results.downloaded++;
     results.files.push(file.path);
     log(`Downloaded: ${file.path}`);
   }
-  
+
   // Update manifest
   const manifest = await loadManifest();
   manifest.repos[`${owner}/${repo}`] = {
     url: repoUrl,
     last_pulled: new Date().toISOString(),
-    items_count: results.downloaded + results.skipped
+    items_count: results.downloaded + results.skipped,
   };
   await saveManifest(manifest);
-  
+
   return results;
 }
 
@@ -411,38 +433,41 @@ export async function pullFromGitHub(repoUrl, options = {}) {
 export async function browseRepo(repoUrl) {
   const { owner, repo, branch } = parseRepoUrl(repoUrl);
   const tree = await fetchRepoTree(owner, repo, branch);
-  
+
   const items = [];
   const skillDirs = new Set();
-  
+
   // First pass: find skill directories (those with SKILL.md)
   for (const file of tree) {
     if (!file || !file.path) continue;
-    if (file.type === 'blob' && file.path.match(/^skills\/[^/]+\/SKILL\.md$/)) {
-      const skillName = file.path.split('/')[1];
+    if (file.type === "blob" && file.path.match(/^skills\/[^/]+\/SKILL\.md$/)) {
+      const skillName = file.path.split("/")[1];
       skillDirs.add(skillName);
     }
   }
-  
+
   // Add skills
   for (const name of skillDirs) {
-    items.push({ type: 'skill', name, path: `skills/${name}` });
+    items.push({ type: "skill", name, path: `skills/${name}` });
   }
-  
+
   // Find agents and output-styles
   for (const file of tree) {
     if (!file || !file.path) continue;
-    if (file.type !== 'blob') continue;
-    
-    if (file.path.startsWith('agents/') && file.path.endsWith('.md')) {
-      const name = basename(file.path, '.md');
-      items.push({ type: 'agent', name, path: file.path });
-    } else if (file.path.startsWith('output-styles/') && file.path.endsWith('.md')) {
-      const name = basename(file.path, '.md');
-      items.push({ type: 'output-style', name, path: file.path });
+    if (file.type !== "blob") continue;
+
+    if (file.path.startsWith("agents/") && file.path.endsWith(".md")) {
+      const name = basename(file.path, ".md");
+      items.push({ type: "agent", name, path: file.path });
+    } else if (
+      file.path.startsWith("output-styles/") &&
+      file.path.endsWith(".md")
+    ) {
+      const name = basename(file.path, ".md");
+      items.push({ type: "output-style", name, path: file.path });
     }
   }
-  
+
   return items;
 }
 
@@ -452,7 +477,7 @@ export async function browseRepo(repoUrl) {
 export async function listPulledRepos() {
   await initClsync();
   const manifest = await loadManifest();
-  
+
   const repos = [];
   for (const [name, info] of Object.entries(manifest.repos || {})) {
     const repoDir = join(REPOS_DIR, name);
@@ -460,10 +485,10 @@ export async function listPulledRepos() {
     repos.push({
       name,
       ...info,
-      items
+      items,
     });
   }
-  
+
   return repos;
 }
 
@@ -483,13 +508,13 @@ export async function getStatus() {
   const manifest = await loadManifest();
   const localStaged = await listLocalStaged();
   const repos = await listPulledRepos();
-  
+
   return {
     local_count: localStaged.length,
     local_items: localStaged,
     repos_count: repos.length,
     repos,
-    last_updated: manifest.last_updated
+    last_updated: manifest.last_updated,
   };
 }
 
@@ -499,24 +524,24 @@ export async function getStatus() {
 export async function exportForPush(outputDir, options = {}) {
   const { author, description } = options;
   const staged = await listLocalStaged();
-  
+
   await mkdir(outputDir, { recursive: true });
-  
+
   // Copy staged items
   for (const item of staged) {
     const sourcePath = join(LOCAL_DIR, item.path);
     const destPath = join(outputDir, item.path);
-    
+
     await mkdir(dirname(destPath), { recursive: true });
-    
-    if (item.type === 'skill') {
+
+    if (item.type === "skill") {
       await cp(sourcePath, destPath, { recursive: true });
     } else {
-      const content = await readFile(sourcePath, 'utf-8');
-      await writeFile(destPath, content, 'utf-8');
+      const content = await readFile(sourcePath, "utf-8");
+      await writeFile(destPath, content, "utf-8");
     }
   }
-  
+
   // Create clsync.json - repository metadata file
   const clsyncJson = {
     $schema: "https://clsync.dev/schema/v1.json",
@@ -526,26 +551,26 @@ export async function exportForPush(outputDir, options = {}) {
     author: author || os.userInfo().username,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    items: staged.map(item => ({
+    items: staged.map((item) => ({
       type: item.type,
       name: item.name,
       path: item.path,
-      description: item.description || null
+      description: item.description || null,
     })),
     stats: {
-      skills: staged.filter(i => i.type === 'skill').length,
-      agents: staged.filter(i => i.type === 'agent').length,
-      output_styles: staged.filter(i => i.type === 'output-style').length,
-      total: staged.length
-    }
+      skills: staged.filter((i) => i.type === "skill").length,
+      agents: staged.filter((i) => i.type === "agent").length,
+      output_styles: staged.filter((i) => i.type === "output-style").length,
+      total: staged.length,
+    },
   };
-  
+
   await writeFile(
-    join(outputDir, 'clsync.json'),
+    join(outputDir, "clsync.json"),
     JSON.stringify(clsyncJson, null, 2),
-    'utf-8'
+    "utf-8"
   );
-  
+
   return { exported: staged.length, items: staged, clsyncJson };
 }
 
@@ -554,13 +579,15 @@ export async function exportForPush(outputDir, options = {}) {
  */
 export async function fetchRepoMetadata(repoUrl) {
   const { owner, repo, branch } = parseRepoUrl(repoUrl);
-  
+
   try {
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/clsync.json`;
-    const response = await fetch(rawUrl, { headers: { 'User-Agent': 'clsync' } });
-    
+    const response = await fetch(rawUrl, {
+      headers: { "User-Agent": "clsync" },
+    });
+
     if (!response.ok) return null;
-    
+
     const content = await response.text();
     return JSON.parse(content);
   } catch {
@@ -584,14 +611,14 @@ export async function isClsyncRepo(repoUrl) {
  * Get user Claude dir
  */
 function getUserClaudeDir() {
-  return join(os.homedir(), '.claude');
+  return join(os.homedir(), ".claude");
 }
 
 /**
  * Get project Claude dir
  */
 function getProjectClaudeDir() {
-  return join(process.cwd(), '.claude');
+  return join(process.cwd(), ".claude");
 }
 
 /**
@@ -599,7 +626,7 @@ function getProjectClaudeDir() {
  */
 async function itemExistsInTarget(name, type, targetDir) {
   const items = await scanItems(targetDir);
-  return items.find(i => i.name === name && i.type === type);
+  return items.find((i) => i.name === name && i.type === type);
 }
 
 /**
@@ -608,12 +635,12 @@ async function itemExistsInTarget(name, type, targetDir) {
 async function getUniqueName(name, type, targetDir) {
   let newName = name;
   let counter = 1;
-  
+
   while (await itemExistsInTarget(newName, type, targetDir)) {
     newName = `${name}-${counter}`;
     counter++;
   }
-  
+
   return newName;
 }
 
@@ -623,64 +650,64 @@ async function getUniqueName(name, type, targetDir) {
  */
 export async function promoteItem(itemName, options = {}) {
   const { rename, force = false } = options;
-  
+
   const projectDir = getProjectClaudeDir();
   const userDir = getUserClaudeDir();
-  
+
   // Find item in project
   const projectItems = await scanItems(projectDir);
-  const item = projectItems.find(i => i.name === itemName);
-  
+  const item = projectItems.find((i) => i.name === itemName);
+
   if (!item) {
     throw new Error(`Item "${itemName}" not found in project (.claude)`);
   }
-  
+
   // Check for conflict in user
   const existingInUser = await itemExistsInTarget(itemName, item.type, userDir);
   let targetName = rename || itemName;
-  
+
   if (existingInUser && !force && !rename) {
     const suggestedName = await getUniqueName(itemName, item.type, userDir);
     throw new Error(
       `"${itemName}" already exists in ~/.claude.\n\n` +
-      `Options:\n` +
-      `  --force    Overwrite existing\n` +
-      `  --rename   Rename to avoid conflict (suggested: "${suggestedName}")`
+        `Options:\n` +
+        `  --force    Overwrite existing\n` +
+        `  --rename   Rename to avoid conflict (suggested: "${suggestedName}")`
     );
   }
-  
+
   // Determine paths
   const sourcePath = join(projectDir, item.path);
   let targetPath;
-  
-  if (item.type === 'skill') {
-    targetPath = join(userDir, 'skills', targetName);
-  } else if (item.type === 'agent') {
-    targetPath = join(userDir, 'agents', `${targetName}.md`);
+
+  if (item.type === "skill") {
+    targetPath = join(userDir, "skills", targetName);
+  } else if (item.type === "agent") {
+    targetPath = join(userDir, "agents", `${targetName}.md`);
   } else {
-    targetPath = join(userDir, 'output-styles', `${targetName}.md`);
+    targetPath = join(userDir, "output-styles", `${targetName}.md`);
   }
-  
+
   // Copy to user
   await mkdir(dirname(targetPath), { recursive: true });
-  
-  if (item.type === 'skill') {
+
+  if (item.type === "skill") {
     await cp(sourcePath, targetPath, { recursive: true });
   } else {
-    const content = await readFile(sourcePath, 'utf-8');
-    await writeFile(targetPath, content, 'utf-8');
+    const content = await readFile(sourcePath, "utf-8");
+    await writeFile(targetPath, content, "utf-8");
   }
-  
+
   // Remove from project
   await rm(sourcePath, { recursive: true, force: true });
-  
+
   return {
     item,
-    from: '.claude',
-    to: '~/.claude',
+    from: ".claude",
+    to: "~/.claude",
     originalName: itemName,
     newName: targetName,
-    renamed: targetName !== itemName
+    renamed: targetName !== itemName,
   };
 }
 
@@ -690,64 +717,68 @@ export async function promoteItem(itemName, options = {}) {
  */
 export async function demoteItem(itemName, options = {}) {
   const { rename, force = false } = options;
-  
+
   const projectDir = getProjectClaudeDir();
   const userDir = getUserClaudeDir();
-  
+
   // Find item in user
   const userItems = await scanItems(userDir);
-  const item = userItems.find(i => i.name === itemName);
-  
+  const item = userItems.find((i) => i.name === itemName);
+
   if (!item) {
     throw new Error(`Item "${itemName}" not found in user (~/.claude)`);
   }
-  
+
   // Check for conflict in project
-  const existingInProject = await itemExistsInTarget(itemName, item.type, projectDir);
+  const existingInProject = await itemExistsInTarget(
+    itemName,
+    item.type,
+    projectDir
+  );
   let targetName = rename || itemName;
-  
+
   if (existingInProject && !force && !rename) {
     const suggestedName = await getUniqueName(itemName, item.type, projectDir);
     throw new Error(
       `"${itemName}" already exists in .claude.\n\n` +
-      `Options:\n` +
-      `  --force    Overwrite existing\n` +
-      `  --rename   Rename to avoid conflict (suggested: "${suggestedName}")`
+        `Options:\n` +
+        `  --force    Overwrite existing\n` +
+        `  --rename   Rename to avoid conflict (suggested: "${suggestedName}")`
     );
   }
-  
+
   // Determine paths
   const sourcePath = join(userDir, item.path);
   let targetPath;
-  
-  if (item.type === 'skill') {
-    targetPath = join(projectDir, 'skills', targetName);
-  } else if (item.type === 'agent') {
-    targetPath = join(projectDir, 'agents', `${targetName}.md`);
+
+  if (item.type === "skill") {
+    targetPath = join(projectDir, "skills", targetName);
+  } else if (item.type === "agent") {
+    targetPath = join(projectDir, "agents", `${targetName}.md`);
   } else {
-    targetPath = join(projectDir, 'output-styles', `${targetName}.md`);
+    targetPath = join(projectDir, "output-styles", `${targetName}.md`);
   }
-  
+
   // Copy to project
   await mkdir(dirname(targetPath), { recursive: true });
-  
-  if (item.type === 'skill') {
+
+  if (item.type === "skill") {
     await cp(sourcePath, targetPath, { recursive: true });
   } else {
-    const content = await readFile(sourcePath, 'utf-8');
-    await writeFile(targetPath, content, 'utf-8');
+    const content = await readFile(sourcePath, "utf-8");
+    await writeFile(targetPath, content, "utf-8");
   }
-  
+
   // Remove from user
   await rm(sourcePath, { recursive: true, force: true });
-  
+
   return {
     item,
-    from: '~/.claude',
-    to: '.claude',
+    from: "~/.claude",
+    to: ".claude",
     originalName: itemName,
     newName: targetName,
-    renamed: targetName !== itemName
+    renamed: targetName !== itemName,
   };
 }
 
@@ -757,12 +788,83 @@ export async function demoteItem(itemName, options = {}) {
 export async function listBothScopes() {
   const projectDir = getProjectClaudeDir();
   const userDir = getUserClaudeDir();
-  
+
   const projectItems = await scanItems(projectDir);
   const userItems = await scanItems(userDir);
-  
+
   return {
     project: projectItems,
-    user: userItems
+    user: userItems,
   };
+}
+
+// =============================================================================
+// PROJECT .clsync (shared project settings from .clsync directory)
+// =============================================================================
+
+/**
+ * List items in project .clsync directory
+ */
+export async function listProjectClsync() {
+  const projectClsyncDir = getProjectClsyncDir();
+  
+  if (!existsSync(projectClsyncDir)) {
+    return [];
+  }
+  
+  return await scanItems(projectClsyncDir);
+}
+
+/**
+ * Load item from .clsync to destination (.claude or ~/.claude)
+ * @param {string} itemName - Item name to load
+ * @param {string} scope - 'user' or 'project'
+ */
+export async function loadFromProjectClsync(itemName, scope = 'project') {
+  const projectClsyncDir = getProjectClsyncDir();
+  
+  if (!existsSync(projectClsyncDir)) {
+    throw new Error(`No .clsync directory found in current project`);
+  }
+  
+  const items = await scanItems(projectClsyncDir);
+  const item = items.find(i => i.name === itemName);
+  
+  if (!item) {
+    throw new Error(`Item "${itemName}" not found in .clsync`);
+  }
+  
+  const sourcePath = join(projectClsyncDir, item.path);
+  const destDir = getClaudeDir(scope);
+  const destPath = join(destDir, item.path);
+  
+  await mkdir(dirname(destPath), { recursive: true });
+  
+  if (item.type === 'skill') {
+    await cp(sourcePath, destPath, { recursive: true });
+  } else {
+    const content = await readFile(sourcePath, 'utf-8');
+    await writeFile(destPath, content, 'utf-8');
+  }
+  
+  return { item, path: destPath, scope };
+}
+
+/**
+ * Load all items from .clsync to destination
+ */
+export async function loadAllFromProjectClsync(scope = 'project') {
+  const items = await listProjectClsync();
+  const results = [];
+  
+  for (const item of items) {
+    try {
+      const result = await loadFromProjectClsync(item.name, scope);
+      results.push(result);
+    } catch (e) {
+      results.push({ item, error: e.message });
+    }
+  }
+  
+  return results;
 }
