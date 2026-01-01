@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * MCP Server for cc-docs-track
+ * MCP Server for clsync
  * Provides tools for syncing documentation and creating Claude Code extensions
  */
 
@@ -25,9 +25,9 @@ const server = new McpServer({
 
 function getDocsDir(scope = "user") {
   if (scope === "project") {
-    return resolve(process.cwd(), "claude", "cc-docs");
+    return resolve(process.cwd(), ".claude", "clsync");
   }
-  return join(os.homedir(), ".claude", "cc-docs");
+  return join(os.homedir(), ".claude", "clsync");
 }
 
 function getClaudeDir(scope = "user") {
@@ -117,7 +117,7 @@ server.tool(
   {
     scope: {
       type: "string",
-      description: 'Where to save docs: "user" (~/.claude/cc-docs) or "project" (./claude/cc-docs)',
+      description: 'Where to save docs: "user" (~/.claude/clsync) or "project" (.claude/clsync)',
       enum: ["user", "project"],
     },
     force: {
@@ -518,7 +518,7 @@ server.resource("docs", "claude-code://{source}/{file}", async (uri) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("cc-docs-track MCP server started");
+  console.error("clsync MCP server started");
 }
 
 main().catch(console.error);

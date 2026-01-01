@@ -33,10 +33,10 @@ npx clsync
 ### CLI 사용
 
 ```bash
-# 기본 실행 (문서를 ~/.claude/cc-docs에 저장)
+# 기본 실행 (문서를 ~/.claude/clsync에 저장)
 npx clsync
 
-# 프로젝트 폴더에 저장 (./claude/cc-docs)
+# 프로젝트 폴더에 저장 (.claude/clsync)
 npx clsync -p
 
 # 미리보기 (실제 다운로드 X)
@@ -64,8 +64,8 @@ Usage: clsync [options]
 Options:
   -V, --version        버전 출력
   -c, --config <path>  설정 파일 경로 (기본: clsync.config.json)
-  -u, --user           ~/.claude/cc-docs에 저장 (기본값)
-  -p, --project        ./claude/cc-docs에 저장 (현재 디렉터리)
+  -u, --user           ~/.claude/clsync에 저장 (기본값)
+  -p, --project        .claude/clsync에 저장 (현재 디렉터리)
   -v, --verbose        상세 로그 출력
   -d, --dry-run        실제 다운로드 없이 미리보기
   -f, --force          기존 파일 덮어쓰기
@@ -74,10 +74,10 @@ Options:
 
 ### 스코프 옵션
 
-| 플래그              | 저장 위치           | 용도                           |
-| ------------------- | ------------------- | ------------------------------ |
-| `-u, --user` (기본) | `~/.claude/cc-docs` | 개인용, 모든 프로젝트에서 공유 |
-| `-p, --project`     | `./claude/cc-docs`  | 프로젝트별, 버전 관리 가능     |
+| 플래그              | 저장 위치          | 용도                           |
+| ------------------- | ------------------ | ------------------------------ |
+| `-u, --user` (기본) | `~/.claude/clsync` | 개인용, 모든 프로젝트에서 공유 |
+| `-p, --project`     | `.claude/clsync`   | 프로젝트별, 버전 관리 가능     |
 
 ## ⚙️ 설정 파일
 
@@ -103,7 +103,7 @@ Options:
     }
   ],
   "output": {
-    "directory": "./claude/cc-docs"
+    "directory": "./.claude/clsync"
   },
   "options": {
     "overwrite": true
@@ -193,25 +193,32 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 
 ## 📁 생성되는 파일 구조
 
+### 동기화된 문서
+
+```
+~/.claude/clsync/claude-code/          # User scope
+.claude/clsync/claude-code/            # Project scope
+```
+
 ### Skills
 
 ```
-~/.claude/skills/my-skill/SKILL.md      # User scope
-.claude/skills/my-skill/SKILL.md        # Project scope
+~/.claude/skills/my-skill/SKILL.md     # User scope
+.claude/skills/my-skill/SKILL.md       # Project scope
 ```
 
 ### Subagents
 
 ```
-~/.claude/agents/my-agent.md            # User scope
-.claude/agents/my-agent.md              # Project scope
+~/.claude/agents/my-agent.md           # User scope
+.claude/agents/my-agent.md             # Project scope
 ```
 
 ### Output Styles
 
 ```
-~/.claude/output-styles/my-style.md     # User scope
-.claude/output-styles/my-style.md       # Project scope
+~/.claude/output-styles/my-style.md    # User scope
+.claude/output-styles/my-style.md      # Project scope
 ```
 
 ## 📄 메타데이터

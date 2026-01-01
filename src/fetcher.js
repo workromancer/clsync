@@ -12,7 +12,7 @@ import { basename } from 'path';
 export async function fetchFromUrl(url) {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'cc-docs-track'
+      'User-Agent': 'clsync'
     }
   });
 

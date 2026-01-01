@@ -39,7 +39,7 @@ const CONFIG_FILENAMES = [
 const defaultConfig = {
   sources: [],
   output: {
-    directory: './claude/cc-docs',
+    directory: './.claude/clsync',
     preserveStructure: true
   },
   options: {

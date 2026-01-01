@@ -73,8 +73,8 @@ program
     "Path to config file",
     "clsync.config.json"
   )
-  .option("-u, --user", "Save to ~/.claude/cc-docs (default)")
-  .option("-p, --project", "Save to ./claude/cc-docs (current directory)")
+  .option("-u, --user", "Save to ~/.claude/clsync (default)")
+  .option("-p, --project", "Save to .claude/clsync (current directory)")
   .option("-v, --verbose", "Enable verbose output")
   .option("-d, --dry-run", "Show what would be done without making changes")
   .option("-f, --force", "Force overwrite existing files")
@@ -87,12 +87,12 @@ program
       // Determine output scope
       let scopePath;
       if (options.project) {
-        config.output.directory = "./claude/cc-docs";
-        scopePath = "./claude/cc-docs";
+        config.output.directory = "./.claude/clsync";
+        scopePath = ".claude/clsync";
         showScope("project", scopePath);
       } else {
-        config.output.directory = join(os.homedir(), ".claude", "cc-docs");
-        scopePath = "~/.claude/cc-docs";
+        config.output.directory = join(os.homedir(), ".claude", "clsync");
+        scopePath = "~/.claude/clsync";
         showScope("user", scopePath);
       }
 

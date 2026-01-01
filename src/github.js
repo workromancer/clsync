@@ -42,7 +42,7 @@ export async function fetchRepoTree(owner, repo, branch = 'main') {
   
   const headers = {
     'Accept': 'application/vnd.github.v3+json',
-    'User-Agent': 'cc-docs-track'
+    'User-Agent': 'clsync'
   };
   
   // Use GitHub token if available
@@ -89,7 +89,7 @@ export async function fetchFileContent(owner, repo, branch, filePath) {
   
   const response = await fetch(rawUrl, {
     headers: {
-      'User-Agent': 'cc-docs-track'
+      'User-Agent': 'clsync'
     }
   });
   

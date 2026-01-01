@@ -2,7 +2,6 @@
   "sources": [
     {
       "name": "claude-code",
-      "baseUrl": "https://code.claude.com/docs/en/",
       "files": [
         "https://code.claude.com/docs/en/discover-plugins.md",
         "https://code.claude.com/docs/en/skills.md",
@@ -16,7 +15,7 @@
     }
   ],
   "output": {
-    "directory": "./claude/cc-docs",
+    "directory": "./.claude/clsync",
     "preserveStructure": false
   },
   "options": {
