@@ -244,6 +244,26 @@ server.tool(
     },
   },
   async ({ name, description, instructions, scope = "user", allowed_tools }) => {
+    // Validate required parameters
+    if (!name) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
+        isError: true,
+      };
+    }
+    if (!description) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'description' parameter is required" }],
+        isError: true,
+      };
+    }
+    if (!instructions) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'instructions' parameter is required" }],
+        isError: true,
+      };
+    }
+    
     const skillDir = join(getSkillsDir(scope), name);
     const skillFile = join(skillDir, "SKILL.md");
 
@@ -348,6 +368,26 @@ server.tool(
     },
   },
   async ({ name, description, instructions, scope = "user", skills, allowed_tools }) => {
+    // Validate required parameters
+    if (!name) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
+        isError: true,
+      };
+    }
+    if (!description) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'description' parameter is required" }],
+        isError: true,
+      };
+    }
+    if (!instructions) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'instructions' parameter is required" }],
+        isError: true,
+      };
+    }
+    
     const agentsDir = getAgentsDir(scope);
     const agentFile = join(agentsDir, `${name}.md`);
 
@@ -445,6 +485,26 @@ server.tool(
     scope: { type: "string", description: '"user" or "project"', enum: ["user", "project"] },
   },
   async ({ name, description, instructions, scope = "user" }) => {
+    // Validate required parameters
+    if (!name) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'name' parameter is required" }],
+        isError: true,
+      };
+    }
+    if (!description) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'description' parameter is required" }],
+        isError: true,
+      };
+    }
+    if (!instructions) {
+      return {
+        content: [{ type: "text", text: "❌ Error: 'instructions' parameter is required" }],
+        isError: true,
+      };
+    }
+    
     const stylesDir = getOutputStylesDir(scope);
     const styleFile = join(stylesDir, `${name}.md`);
 
