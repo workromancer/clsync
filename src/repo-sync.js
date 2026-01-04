@@ -20,6 +20,8 @@ const LOCAL_DIR = join(CLSYNC_DIR, "local");
 const REPOS_DIR = join(CLSYNC_DIR, "repos");
 const MANIFEST_FILE = join(CLSYNC_DIR, "manifest.json");
 
+const LOCAL_CLSYNC_JSON = join(LOCAL_DIR, "clsync.json");
+
 /**
  * Initialize ~/.clsync directory
  */
@@ -39,6 +41,322 @@ export async function initClsync() {
       last_updated: new Date().toISOString(),
     });
   }
+
+  // Create local clsync.json if not exists
+  if (!existsSync(LOCAL_CLSYNC_JSON)) {
+    const clsyncJson = {
+      $schema: "https://clsync.dev/schema/v1.json",
+      version: "1.0.0",
+      name: "local",
+      description: "Local staging area for Claude Code settings",
+      author: os.userInfo().username,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      items: [],
+      stats: {
+        skills: 0,
+        agents: 0,
+        output_styles: 0,
+        total: 0,
+      },
+    };
+    await writeFile(LOCAL_CLSYNC_JSON, JSON.stringify(clsyncJson, null, 2), "utf-8");
+  }
+}
+
+/**
+ * Update ~/.clsync/local/clsync.json with current staged items
+ */
+async function updateLocalClsyncJson() {
+  const staged = await scanItems(LOCAL_DIR);
+  
+  let existing = {};
+  try {
+    const content = await readFile(LOCAL_CLSYNC_JSON, "utf-8");
+    existing = JSON.parse(content);
+  } catch {
+    existing = {
+      $schema: "https://clsync.dev/schema/v1.json",
+      version: "1.0.0",
+      name: "local",
+      description: "Local staging area for Claude Code settings",
+      author: os.userInfo().username,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  const clsyncJson = {
+    ...existing,
+    updated_at: new Date().toISOString(),
+    items: staged.map((item) => ({
+      type: item.type,
+      name: item.name,
+      path: item.path,
+      description: item.description || null,
+    })),
+    stats: {
+      skills: staged.filter((i) => i.type === "skill").length,
+      agents: staged.filter((i) => i.type === "agent").length,
+      output_styles: staged.filter((i) => i.type === "output-style").length,
+      total: staged.length,
+    },
+  };
+
+  await writeFile(LOCAL_CLSYNC_JSON, JSON.stringify(clsyncJson, null, 2), "utf-8");
+}
+
+// =============================================================================
+// GITHUB ACCOUNT & LOCAL REPOSITORY LINK
+// =============================================================================
+
+import { execSync } from "child_process";
+
+/**
+ * Check if gh CLI is installed
+ */
+function isGhInstalled() {
+  try {
+    execSync("gh --version", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get GitHub account info from gh CLI
+ */
+export async function getGitHubAccountInfo() {
+  if (!isGhInstalled()) {
+    throw new Error(
+      "GitHub CLI (gh) is not installed.\n\n" +
+      "Install it with:\n" +
+      "  brew install gh     # macOS\n" +
+      "  sudo apt install gh # Ubuntu/Debian\n\n" +
+      "Then authenticate:\n" +
+      "  gh auth login"
+    );
+  }
+
+  try {
+    const statusOutput = execSync("gh auth status 2>&1", { encoding: "utf-8" });
+    
+    // Parse account info
+    const accountMatch = statusOutput.match(/Logged in to ([\w.]+) account (\w+)/);
+    const protocolMatch = statusOutput.match(/Git operations protocol: (\w+)/);
+    const scopesMatch = statusOutput.match(/Token scopes: '([^']+)'/);
+    
+    if (!accountMatch) {
+      throw new Error("Not logged in to GitHub. Run: gh auth login");
+    }
+
+    return {
+      host: accountMatch[1],
+      username: accountMatch[2],
+      protocol: protocolMatch ? protocolMatch[1] : "https",
+      scopes: scopesMatch ? scopesMatch[1].split("', '") : [],
+      authenticated: true,
+    };
+  } catch (error) {
+    if (error.message.includes("Not logged in")) {
+      throw error;
+    }
+    throw new Error("Failed to get GitHub account info: " + error.message);
+  }
+}
+
+/**
+ * Link local staging to a GitHub repository
+ */
+export async function linkLocalRepo(repoUrl) {
+  await initClsync();
+  
+  const { owner, repo } = parseRepoUrl(repoUrl);
+  const accountInfo = await getGitHubAccountInfo();
+  
+  // Update clsync.json with repository info
+  let clsyncJson = {};
+  try {
+    const content = await readFile(LOCAL_CLSYNC_JSON, "utf-8");
+    clsyncJson = JSON.parse(content);
+  } catch {
+    clsyncJson = {
+      $schema: "https://clsync.dev/schema/v1.json",
+      version: "1.0.0",
+      name: "local",
+      description: "Local staging area for Claude Code settings",
+      author: accountInfo.username,
+      created_at: new Date().toISOString(),
+      items: [],
+      stats: { skills: 0, agents: 0, output_styles: 0, total: 0 },
+    };
+  }
+
+  clsyncJson.repository = {
+    url: `https://github.com/${owner}/${repo}`,
+    owner,
+    repo,
+    linked_at: new Date().toISOString(),
+    linked_by: accountInfo.username,
+  };
+  clsyncJson.author = accountInfo.username;
+  clsyncJson.updated_at = new Date().toISOString();
+
+  await writeFile(LOCAL_CLSYNC_JSON, JSON.stringify(clsyncJson, null, 2), "utf-8");
+
+  return {
+    repository: `${owner}/${repo}`,
+    account: accountInfo,
+    clsyncJson,
+  };
+}
+
+/**
+ * Unlink local staging from repository
+ */
+export async function unlinkLocalRepo() {
+  let clsyncJson = {};
+  try {
+    const content = await readFile(LOCAL_CLSYNC_JSON, "utf-8");
+    clsyncJson = JSON.parse(content);
+  } catch {
+    throw new Error("No local clsync.json found. Run: clsync init");
+  }
+
+  if (!clsyncJson.repository) {
+    throw new Error("No repository is linked.");
+  }
+
+  const previousRepo = clsyncJson.repository;
+  delete clsyncJson.repository;
+  clsyncJson.updated_at = new Date().toISOString();
+
+  await writeFile(LOCAL_CLSYNC_JSON, JSON.stringify(clsyncJson, null, 2), "utf-8");
+
+  return { unlinked: previousRepo };
+}
+
+/**
+ * Get local staging info including linked repo
+ */
+export async function getLocalInfo() {
+  await initClsync();
+  
+  let clsyncJson = {};
+  try {
+    const content = await readFile(LOCAL_CLSYNC_JSON, "utf-8");
+    clsyncJson = JSON.parse(content);
+  } catch {
+    clsyncJson = null;
+  }
+
+  let accountInfo = null;
+  try {
+    accountInfo = await getGitHubAccountInfo();
+  } catch {
+    // gh not installed or not authenticated
+  }
+
+  const staged = await scanItems(LOCAL_DIR);
+
+  return {
+    clsyncJson,
+    account: accountInfo,
+    staged,
+    repository: clsyncJson?.repository || null,
+  };
+}
+
+/**
+ * Generate README.md content from clsync.json
+ * Template-based, no AI involved
+ */
+export function generateReadmeFromClsyncJson(clsyncJson, repoPath = null) {
+  const { name, description, author, items = [], stats = {}, repository } = clsyncJson;
+  
+  const repoName = repoPath || (repository ? `${repository.owner}/${repository.repo}` : 'owner/repo');
+  
+  // Group items by type
+  const skills = items.filter(i => i.type === 'skill');
+  const agents = items.filter(i => i.type === 'agent');
+  const outputStyles = items.filter(i => i.type === 'output-style');
+
+  // Generate skills section
+  const skillsSection = skills.length > 0 ? `
+## 🎯 Skills
+
+| Name | Description |
+|------|-------------|
+${skills.map(s => `| \`${s.name}\` | ${s.description || '-'} |`).join('\n')}
+` : '';
+
+  // Generate agents section
+  const agentsSection = agents.length > 0 ? `
+## 🤖 Subagents
+
+| Name | Description |
+|------|-------------|
+${agents.map(a => `| \`${a.name}\` | ${a.description || '-'} |`).join('\n')}
+` : '';
+
+  // Generate output styles section
+  const stylesSection = outputStyles.length > 0 ? `
+## ✨ Output Styles
+
+| Name | Description |
+|------|-------------|
+${outputStyles.map(s => `| \`${s.name}\` | ${s.description || '-'} |`).join('\n')}
+` : '';
+
+  const readme = `# ${name || 'Claude Code Settings'}
+
+${description || 'Claude Code settings managed by clsync.'}
+
+[![clsync compatible](https://img.shields.io/badge/clsync-compatible-blue)](https://github.com/workromancer/clsync)
+
+## 📊 Stats
+
+| Type | Count |
+|------|-------|
+| Skills | ${stats.skills || 0} |
+| Subagents | ${stats.agents || 0} |
+| Output Styles | ${stats.output_styles || 0} |
+| **Total** | **${stats.total || 0}** |
+${skillsSection}${agentsSection}${stylesSection}
+## 🚀 Quick Start
+
+\`\`\`bash
+# Install clsync
+npm install -g clsync
+
+# Pull this repository
+clsync pull ${repoName}
+
+# Apply all settings to user scope (~/.claude)
+clsync apply -a -s ${repoName} -u
+
+# Or apply specific item
+clsync apply <item-name> -s ${repoName} -u
+\`\`\`
+
+## 📁 Structure
+
+\`\`\`
+${repoName}/
+├── clsync.json          # Repository metadata
+├── README.md            # This file (auto-generated)
+${skills.length > 0 ? `├── skills/              # ${skills.length} skill(s)\n${skills.map((s, i) => `│   ${i === skills.length - 1 ? '└──' : '├──'} ${s.name}/`).join('\n')}\n` : ''}${agents.length > 0 ? `├── agents/              # ${agents.length} agent(s)\n${agents.map((a, i) => `│   ${i === agents.length - 1 ? '└──' : '├──'} ${a.name}.md`).join('\n')}\n` : ''}${outputStyles.length > 0 ? `└── output-styles/       # ${outputStyles.length} style(s)\n${outputStyles.map((s, i) => `    ${i === outputStyles.length - 1 ? '└──' : '├──'} ${s.name}.md`).join('\n')}\n` : ''}\`\`\`
+
+## 👤 Author
+
+${author || 'Unknown'}
+
+---
+
+*Auto-generated by [clsync](https://github.com/workromancer/clsync) on ${new Date().toISOString().split('T')[0]}*
+`;
+
+  return readme;
 }
 
 /**
@@ -180,6 +498,9 @@ export async function stageItem(itemName, scope = "user") {
     await writeFile(destPath, content, "utf-8");
   }
 
+  // Update clsync.json
+  await updateLocalClsyncJson();
+
   return { item, path: destPath };
 }
 
@@ -226,6 +547,9 @@ export async function unstageItem(itemName) {
 
   const itemPath = join(LOCAL_DIR, item.path);
   await rm(itemPath, { recursive: true, force: true });
+
+  // Update clsync.json
+  await updateLocalClsyncJson();
 
   return { item };
 }
@@ -338,7 +662,23 @@ async function fetchRepoTree(owner, repo, branch = "main") {
     { headers }
   );
 
-  if (!response.ok) throw new Error(`GitHub API error: ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 409) {
+      throw new Error(
+        `Repository "${owner}/${repo}" is empty.\n\n` +
+        `To initialize it with your settings, use:\n` +
+        `  clsync push ${owner}/${repo}\n\n` +
+        `This will push your local settings (~/.clsync/local) to the repository.`
+      );
+    }
+    if (response.status === 404) {
+      throw new Error(
+        `Repository "${owner}/${repo}" not found.\n\n` +
+        `Make sure the repository exists and is accessible.`
+      );
+    }
+    throw new Error(`GitHub API error: ${response.status}`);
+  }
   const data = await response.json();
   return data.tree || [];
 }
@@ -930,7 +1270,7 @@ async function getGitRemote(dir) {
  * @param {object} options - { repo, message, force }
  */
 export async function pushToGitHub(scope = "local", options = {}) {
-  const { repo, message = "Update clsync settings", force = false, onProgress } = options;
+  let { repo, message = "Update clsync settings", force = false, onProgress } = options;
   const log = (msg) => onProgress && onProgress(msg);
 
   // Check git availability
@@ -946,6 +1286,20 @@ export async function pushToGitHub(scope = "local", options = {}) {
     await initClsync();
     sourceDir = LOCAL_DIR;
     items = await listLocalStaged();
+
+    // If no repo specified, try to get from linked repository
+    if (!repo) {
+      try {
+        const content = await readFile(LOCAL_CLSYNC_JSON, "utf-8");
+        const clsyncJson = JSON.parse(content);
+        if (clsyncJson.repository) {
+          repo = `${clsyncJson.repository.owner}/${clsyncJson.repository.repo}`;
+          log(`Using linked repository: ${repo}`);
+        }
+      } catch {
+        // No linked repo
+      }
+    }
   } else if (scope === "user") {
     sourceDir = getUserClaudeDir();
     items = await scanItems(sourceDir);
@@ -1012,36 +1366,8 @@ export async function pushToGitHub(scope = "local", options = {}) {
     "utf-8"
   );
 
-  // Create README.md
-  const readmeContent = `# Claude Code Settings
-
-This repository contains Claude Code settings managed by [clsync](https://github.com/workromancer/clsync).
-
-## Contents
-
-${items.map(i => `- **${i.type}**: ${i.name}`).join('\n')}
-
-## Usage
-
-\`\`\`bash
-# Install clsync
-npm install -g clsync
-
-# Pull and apply these settings
-clsync pull ${repo || 'owner/repo'}
-clsync apply <setting-name>
-\`\`\`
-
-## Stats
-
-- Skills: ${clsyncJson.stats.skills}
-- Agents: ${clsyncJson.stats.agents}
-- Output Styles: ${clsyncJson.stats.output_styles}
-
----
-*Last updated: ${new Date().toLocaleString()}*
-`;
-
+  // Create README.md from template
+  const readmeContent = generateReadmeFromClsyncJson(clsyncJson, repo);
   await writeFile(join(tempDir, "README.md"), readmeContent, "utf-8");
 
   // Initialize git and push

@@ -27,7 +27,12 @@ import {
   demoteItem,
   listBothScopes,
   fetchOnlineRepoList,
-  pullOnlineRepo
+  pullOnlineRepo,
+  getGitHubAccountInfo,
+  linkLocalRepo,
+  unlinkLocalRepo,
+  getLocalInfo,
+  generateReadmeFromClsyncJson
 } from "../src/repo-sync.js";
 
 // Get terminal width
@@ -581,11 +586,169 @@ program
       console.log(chalk.dim('    ~/.clsync/'));
       console.log(chalk.dim('    ├── manifest.json'));
       console.log(chalk.dim('    ├── local/         # Your staged items'));
+      console.log(chalk.dim('    │   ├── clsync.json'));
       console.log(chalk.dim('    │   ├── skills/'));
       console.log(chalk.dim('    │   ├── agents/'));
       console.log(chalk.dim('    │   └── output-styles/'));
       console.log(chalk.dim('    └── repos/         # Pulled repositories'));
       console.log(chalk.dim('        └── owner/repo/\n'));
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// LOCAL (GitHub account & repository link)
+// ============================================================================
+program
+  .command("local")
+  .description("Manage local staging area and GitHub repository link")
+  .option("-l, --link <repo>", "Link to GitHub repository (owner/repo)")
+  .option("-u, --unlink", "Unlink from GitHub repository")
+  .option("-a, --account", "Show GitHub account info only")
+  .action(async (options) => {
+    try {
+      if (options.link) {
+        // Link to repository
+        console.log(chalk.cyan(`\n  🔗 Linking to GitHub repository: ${options.link}\n`));
+        const spinner = ora('Connecting...').start();
+        
+        try {
+          const result = await linkLocalRepo(options.link);
+          spinner.succeed(`Linked to ${result.repository}`);
+          
+          console.log(chalk.dim(`\n  Account:    @${result.account.username}`));
+          console.log(chalk.dim(`  Repository: ${result.repository}`));
+          console.log(chalk.dim(`  Protocol:   ${result.account.protocol}\n`));
+          
+          showSuccess('Repository Linked!');
+        } catch (error) {
+          spinner.fail('Failed to link');
+          showError(error.message);
+          process.exit(1);
+        }
+        return;
+      }
+
+      if (options.unlink) {
+        // Unlink from repository
+        console.log(chalk.cyan('\n  🔓 Unlinking from repository...\n'));
+        
+        try {
+          const result = await unlinkLocalRepo();
+          console.log(chalk.dim(`  Unlinked from: ${result.unlinked.owner}/${result.unlinked.repo}\n`));
+          showSuccess('Repository Unlinked!');
+        } catch (error) {
+          showError(error.message);
+          process.exit(1);
+        }
+        return;
+      }
+
+      if (options.account) {
+        // Show account info only
+        console.log(chalk.cyan('\n  👤 GitHub Account Info\n'));
+        
+        try {
+          const accountInfo = await getGitHubAccountInfo();
+          console.log(chalk.white.bold('  Account:  ') + chalk.green(`@${accountInfo.username}`));
+          console.log(chalk.white.bold('  Host:     ') + chalk.dim(accountInfo.host));
+          console.log(chalk.white.bold('  Protocol: ') + chalk.dim(accountInfo.protocol));
+          console.log(chalk.white.bold('  Scopes:   ') + chalk.dim(accountInfo.scopes.join(', ')));
+          console.log();
+        } catch (error) {
+          showError(error.message);
+          process.exit(1);
+        }
+        return;
+      }
+
+      // Default: Show local info
+      console.log(chalk.cyan('\n  📦 Local Staging Area\n'));
+      
+      const info = await getLocalInfo();
+      
+      // Account info
+      if (info.account) {
+        console.log(chalk.white.bold('  👤 GitHub Account'));
+        console.log(chalk.dim(`     @${info.account.username} (${info.account.host})`));
+      } else {
+        console.log(chalk.yellow('  ⚠️  GitHub CLI not configured'));
+        console.log(chalk.dim('     Run: gh auth login'));
+      }
+      console.log();
+
+      // Repository link
+      if (info.repository) {
+        console.log(chalk.white.bold('  🔗 Linked Repository'));
+        console.log(chalk.dim(`     ${info.repository.owner}/${info.repository.repo}`));
+        console.log(chalk.dim(`     ${info.repository.url}`));
+        console.log(chalk.dim(`     Linked: ${info.repository.linked_at}`));
+      } else {
+        console.log(chalk.dim('  📭 No repository linked'));
+        console.log(chalk.dim('     Link with: clsync local --link owner/repo'));
+      }
+      console.log();
+
+      // Staged items
+      console.log(chalk.white.bold('  📋 Staged Items:') + chalk.dim(` ${info.staged.length} items`));
+      if (info.staged.length > 0) {
+        for (const item of info.staged) {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          console.log(chalk.dim(`     ${icon} ${item.name}`));
+        }
+      }
+      console.log();
+
+      // Usage hints
+      if (info.repository && info.staged.length > 0) {
+        console.log(chalk.dim('  💡 Push to GitHub: clsync push'));
+      } else if (!info.repository) {
+        console.log(chalk.dim('  💡 Link a repo: clsync local --link owner/repo'));
+      } else {
+        console.log(chalk.dim('  💡 Stage items: clsync stage -u -a'));
+      }
+      console.log();
+
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// README (Generate README.md from clsync.json)
+// ============================================================================
+program
+  .command("readme")
+  .description("Generate README.md from clsync.json (template-based, no AI)")
+  .option("-o, --output <path>", "Output file path (default: stdout)")
+  .option("-s, --save", "Save to ~/.clsync/local/README.md")
+  .action(async (options) => {
+    try {
+      const info = await getLocalInfo();
+      
+      if (!info.clsyncJson) {
+        showError('No clsync.json found. Run: clsync init');
+        process.exit(1);
+      }
+
+      const readme = generateReadmeFromClsyncJson(info.clsyncJson);
+
+      if (options.output) {
+        const { writeFile } = await import('fs/promises');
+        await writeFile(options.output, readme, 'utf-8');
+        console.log(chalk.green(`  ✓ README.md saved to: ${options.output}\n`));
+      } else if (options.save) {
+        const { writeFile } = await import('fs/promises');
+        const path = join(os.homedir(), '.clsync', 'local', 'README.md');
+        await writeFile(path, readme, 'utf-8');
+        console.log(chalk.green(`  ✓ README.md saved to: ${path}\n`));
+      } else {
+        // Output to stdout
+        console.log(readme);
+      }
     } catch (error) {
       showError(error.message);
       process.exit(1);
@@ -829,7 +992,7 @@ program
 // ============================================================================
 program
   .command("push [repo]")
-  .description("Push settings to GitHub repository")
+  .description("Push settings to GitHub repository (uses linked repo if not specified)")
   .option("-s, --scope <scope>", "Scope: local, user, or project", "local")
   .option("-m, --message <msg>", "Commit message", "Update clsync settings")
   .option("-f, --force", "Force push (overwrites remote)")
@@ -841,6 +1004,21 @@ program
                          scope === 'user' ? '~/.claude' : '.claude';
       
       console.log(chalk.cyan(`  📤 Pushing from: ${scopeLabel}\n`));
+      
+      // Check for linked repository if no repo specified and scope is local
+      if (!repo && scope === 'local') {
+        const info = await getLocalInfo();
+        if (info.repository) {
+          console.log(chalk.dim(`  🔗 Using linked repository: ${info.repository.owner}/${info.repository.repo}\n`));
+        } else {
+          console.log(chalk.yellow('  ⚠️  No repository specified and no linked repository found.\n'));
+          console.log(chalk.dim('  Link a repository first:'));
+          console.log(chalk.dim('     clsync local --link owner/repo\n'));
+          console.log(chalk.dim('  Or specify a repository:'));
+          console.log(chalk.dim('     clsync push owner/repo\n'));
+          process.exit(1);
+        }
+      }
       
       const spinner = ora('Preparing settings for push...').start();
       const results = await pushToGitHub(scope, {

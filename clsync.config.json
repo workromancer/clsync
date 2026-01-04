@@ -10,7 +10,14 @@
         "https://code.claude.com/docs/en/headless.md",
         "https://code.claude.com/docs/en/mcp.md",
         "https://code.claude.com/docs/en/sub-agents.md",
-        "https://code.claude.com/docs/en/plugins.md"
+        "https://code.claude.com/docs/en/plugins.md",
+
+        "https://code.claude.com/docs/en/cli-reference.md",
+        "https://code.claude.com/docs/en/interactive-mode.md",
+        "https://code.claude.com/docs/en/slash-commands.md",
+        "https://code.claude.com/docs/en/checkpointing.md",
+        "https://code.claude.com/docs/en/hooks.md",
+        "https://code.claude.com/docs/en/plugins-reference.md"
       ]
     }
   ],
