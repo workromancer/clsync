@@ -58,20 +58,20 @@ ${chalk.cyan('  ██║     ██║     ╚════██║  ╚██�
 ${chalk.cyan('  ╚██████╗███████╗███████║   ██║   ██║ ╚████║╚██████╗')}
 ${chalk.cyan('   ╚═════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝')}
 ${chalk.dim('  ───────────────────────────────────────────────────')}
-${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.3')}
+${chalk.dim('   Claude Code Environment Sync')}           ${chalk.cyan('v0.2.4')}
 `;
 
 // Compact banner (for 40-54 columns)
 const bannerCompact = `
 ${chalk.cyan.bold('  ╔═══════════════════════════╗')}
-${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.3')}      ${chalk.cyan.bold('║')}
+${chalk.cyan.bold('  ║')}  ${chalk.white.bold('CLSYNC')} ${chalk.dim('v0.2.4')}      ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ║')}  ${chalk.dim('Claude Code Sync')}        ${chalk.cyan.bold('║')}
 ${chalk.cyan.bold('  ╚═══════════════════════════╝')}
 `;
 
 // Minimal banner (for <40 columns)
 const bannerMinimal = `
-${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v0.2.3')}
+${chalk.cyan.bold('CLSYNC')} ${chalk.dim('v0.2.4')}
 ${chalk.dim('Claude Code Sync')}
 `;
 
