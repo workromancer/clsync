@@ -34,7 +34,10 @@ import {
   getLocalInfo,
   generateReadmeFromClsyncJson,
   findClaudeDirs,
-  scanLocalClaudeDirs
+  scanLocalClaudeDirs,
+  getClaudeDirsWithCache,
+  getScanCacheInfo,
+  clearScanCache
 } from "../src/repo-sync.js";
 
 // Get terminal width
@@ -1448,9 +1451,170 @@ program
   .option("-c, --cmd <args>", "Claude command/prompt to run (default: /review)")
   .option("-l, --list", "Only list directories, don't run commands (dry run)")
   .option("-i, --interactive", "Run claude interactively for each directory")
+  .option("-r, --refresh", "Force fresh scan (ignore cache)")
+  .option("-g, --go", "Select a project and navigate to it")
+  .option("-o, --open", "Open selected project in Finder/file manager")
+  .option("--cache-info", "Show cache information")
+  .option("--clear-cache", "Clear scan cache")
   .option("-v, --verbose", "Show detailed output")
   .action(async (options) => {
     try {
+      // Handle cache info
+      if (options.cacheInfo) {
+        console.log(chalk.cyan('\n  📦 Scan Cache Info\n'));
+        
+        const info = await getScanCacheInfo();
+        
+        if (!info.exists) {
+          console.log(chalk.yellow('  No cache found.\n'));
+          console.log(chalk.dim('  Run: clsync scan --list\n'));
+        } else {
+          console.log(chalk.white.bold('  Cache Status:') + (info.isValid ? chalk.green(' Valid') : chalk.yellow(' Expired')));
+          console.log(chalk.dim(`  Directories: ${info.dirs}`));
+          console.log(chalk.dim(`  Scanned at:  ${info.scannedAt}`));
+          console.log(chalk.dim(`  Age:         ${info.ageMinutes} minutes`));
+          console.log(chalk.dim(`  Location:    ~/.clsync/scan-cache.json\n`));
+          
+          if (!info.isValid) {
+            console.log(chalk.dim('  💡 Cache expired. Run: clsync scan --refresh\n'));
+          }
+        }
+        process.exit(0);
+      }
+
+      // Handle clear cache
+      if (options.clearCache) {
+        console.log(chalk.cyan('\n  🗑️  Clearing scan cache...\n'));
+        await clearScanCache();
+        console.log(chalk.green('  ✓ Cache cleared\n'));
+        process.exit(0);
+      }
+
+      // Handle --go (select project)
+      if (options.go || options.open) {
+        console.log(chalk.cyan('\n  📁 Select a Project\n'));
+        
+        const { dirs, fromCache, cacheAge } = await getClaudeDirsWithCache({
+          useCache: true,
+          forceRefresh: false
+        });
+
+        if (dirs.length === 0) {
+          console.log(chalk.yellow('  No projects found in cache.\n'));
+          console.log(chalk.dim('  Run: clsync scan --list\n'));
+          process.exit(0);
+        }
+
+        if (fromCache) {
+          console.log(chalk.dim(`  Using cache (${cacheAge}m old, ${dirs.length} projects)\n`));
+        }
+
+        const inquirer = await import('inquirer');
+        const homeDir = os.homedir();
+
+        const { selectedDir } = await inquirer.default.prompt([
+          {
+            type: 'list',
+            name: 'selectedDir',
+            message: 'Select a project:',
+            choices: [
+              ...dirs.map((dir, i) => {
+                const displayPath = dir.startsWith(homeDir) 
+                  ? dir.replace(homeDir, '~') 
+                  : dir;
+                return { name: `${String(i + 1).padStart(2)}. ${displayPath}`, value: dir };
+              }),
+              new inquirer.default.Separator(),
+              { name: '❌ Cancel', value: null }
+            ],
+            pageSize: 15
+          }
+        ]);
+
+        if (!selectedDir) {
+          console.log(chalk.dim('\n  Cancelled.\n'));
+          process.exit(0);
+        }
+
+        const displayPath = selectedDir.startsWith(homeDir) 
+          ? selectedDir.replace(homeDir, '~') 
+          : selectedDir;
+
+        // If --open, open in Finder
+        if (options.open) {
+          console.log(chalk.cyan(`\n  📂 Opening: ${displayPath}\n`));
+          const { exec } = await import('child_process');
+          const { promisify } = await import('util');
+          const execPromise = promisify(exec);
+          
+          // macOS: open, Linux: xdg-open, Windows: explorer
+          const openCmd = process.platform === 'darwin' ? 'open' : 
+                         process.platform === 'win32' ? 'explorer' : 'xdg-open';
+          await execPromise(`${openCmd} "${selectedDir}"`);
+          console.log(chalk.green('  ✓ Opened in file manager\n'));
+          process.exit(0);
+        }
+
+        // Show action menu for --go
+        const { action } = await inquirer.default.prompt([
+          {
+            type: 'list',
+            name: 'action',
+            message: `What would you like to do with ${displayPath}?`,
+            choices: [
+              { name: '📋 Copy path to clipboard', value: 'copy' },
+              { name: '📂 Open in Finder', value: 'open' },
+              { name: '🤖 Run claude here', value: 'claude' },
+              { name: '💻 Print cd command', value: 'cd' },
+              new inquirer.default.Separator(),
+              { name: '← Back', value: null }
+            ]
+          }
+        ]);
+
+        if (!action) {
+          process.exit(0);
+        }
+
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execPromise = promisify(exec);
+
+        switch (action) {
+          case 'copy':
+            // macOS: pbcopy, Linux: xclip, Windows: clip
+            const copyCmd = process.platform === 'darwin' ? 'pbcopy' : 
+                           process.platform === 'win32' ? 'clip' : 'xclip -selection clipboard';
+            await execPromise(`echo -n "${selectedDir}" | ${copyCmd}`);
+            console.log(chalk.green(`\n  ✓ Copied to clipboard: ${displayPath}\n`));
+            break;
+
+          case 'open':
+            const openCmd = process.platform === 'darwin' ? 'open' : 
+                           process.platform === 'win32' ? 'explorer' : 'xdg-open';
+            await execPromise(`${openCmd} "${selectedDir}"`);
+            console.log(chalk.green(`\n  ✓ Opened: ${displayPath}\n`));
+            break;
+
+          case 'claude':
+            console.log(chalk.cyan(`\n  🤖 Starting Claude in: ${displayPath}\n`));
+            const { spawn } = await import('child_process');
+            spawn('claude', [], {
+              cwd: selectedDir,
+              stdio: 'inherit',
+              shell: true
+            });
+            break;
+
+          case 'cd':
+            console.log(chalk.cyan(`\n  💡 Run this command:\n`));
+            console.log(chalk.white.bold(`     cd "${selectedDir}"\n`));
+            break;
+        }
+
+        process.exit(0);
+      }
+
       console.log(chalk.cyan('\n  🔍 Scanning for Claude Code Projects\n'));
 
       const searchPaths = options.path || undefined;
@@ -1459,21 +1623,27 @@ program
       const claudeArgs = options.cmd ? options.cmd.split(' ') : undefined;
       const dryRun = options.list || false;
       const verbose = options.verbose || false;
+      const forceRefresh = options.refresh || false;
 
       if (searchPaths) {
         console.log(chalk.dim(`  Search paths: ${searchPaths.join(', ')}\n`));
       }
 
-      // First, find all directories
+      // Get directories (with cache support)
       const spinner = ora('Searching for .claude directories...').start();
       
-      const dirs = await findClaudeDirs({
+      const { dirs, fromCache, scannedAt, cacheAge } = await getClaudeDirsWithCache({
         searchPaths,
         maxDepth,
-        exclude
+        exclude,
+        forceRefresh,
+        useCache: !forceRefresh
       });
 
-      spinner.succeed(`Found ${dirs.length} directories with .claude`);
+      if (fromCache) {
+        spinner.succeed(`Found ${dirs.length} directories ${chalk.dim(`(from cache, ${cacheAge}m old)`)}`);
+      } else {
+        spinner.succeed(`Found ${dirs.length} directories with .claude ${chalk.dim('(fresh scan, cached)')}`);      }
       console.log();
 
       if (dirs.length === 0) {
@@ -1498,7 +1668,11 @@ program
       console.log();
 
       if (dryRun) {
-        console.log(chalk.dim('  (Dry run - no commands executed)\n'));
+        if (fromCache) {
+          console.log(chalk.dim(`  (Cached ${cacheAge}m ago. Use --refresh for fresh scan)\n`));
+        } else {
+          console.log(chalk.dim('  (Results cached to ~/.clsync/scan-cache.json)\n'));
+        }
         process.exit(0);
       }
 

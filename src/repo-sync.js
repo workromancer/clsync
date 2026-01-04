@@ -21,6 +21,7 @@ const REPOS_DIR = join(CLSYNC_DIR, "repos");
 const MANIFEST_FILE = join(CLSYNC_DIR, "manifest.json");
 
 const LOCAL_CLSYNC_JSON = join(LOCAL_DIR, "clsync.json");
+const SCAN_CACHE_FILE = join(CLSYNC_DIR, "scan-cache.json");
 
 /**
  * Initialize ~/.clsync directory
@@ -1435,6 +1436,162 @@ export async function pushToGitHub(scope = "local", options = {}) {
 // =============================================================================
 
 /**
+ * Load scan cache from ~/.clsync/scan-cache.json
+ * @returns {Promise<{dirs: string[], scannedAt: string, searchPaths: string[], maxDepth: number} | null>}
+ */
+export async function loadScanCache() {
+  try {
+    const content = await readFile(SCAN_CACHE_FILE, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save scan cache to ~/.clsync/scan-cache.json
+ * @param {Object} cache - Cache data
+ * @param {string[]} cache.dirs - List of directories
+ * @param {string[]} cache.searchPaths - Search paths used
+ * @param {number} cache.maxDepth - Max depth used
+ */
+export async function saveScanCache(cache) {
+  await mkdir(CLSYNC_DIR, { recursive: true });
+  
+  const cacheData = {
+    ...cache,
+    scannedAt: new Date().toISOString(),
+    version: "1.0.0"
+  };
+  
+  await writeFile(SCAN_CACHE_FILE, JSON.stringify(cacheData, null, 2), "utf-8");
+  return cacheData;
+}
+
+/**
+ * Check if scan cache is valid (not expired)
+ * @param {Object} cache - Cache data
+ * @param {number} maxAgeMinutes - Maximum age in minutes (default: 60)
+ * @returns {boolean}
+ */
+export function isScanCacheValid(cache, maxAgeMinutes = 60) {
+  if (!cache || !cache.scannedAt) return false;
+  
+  const scannedAt = new Date(cache.scannedAt);
+  const now = new Date();
+  const ageMinutes = (now - scannedAt) / (1000 * 60);
+  
+  return ageMinutes < maxAgeMinutes;
+}
+
+/**
+ * Get cached directories or scan fresh
+ * @param {Object} options - Options
+ * @param {boolean} options.useCache - Use cache if available (default: true)
+ * @param {boolean} options.forceRefresh - Force fresh scan (default: false)
+ * @param {number} options.cacheMaxAge - Cache max age in minutes (default: 60)
+ * @param {string[]} options.searchPaths - Search paths
+ * @param {number} options.maxDepth - Max depth
+ * @param {string[]} options.exclude - Exclude patterns
+ * @param {Function} options.onProgress - Progress callback
+ * @returns {Promise<{dirs: string[], fromCache: boolean, scannedAt: string}>}
+ */
+export async function getClaudeDirsWithCache(options = {}) {
+  const {
+    useCache = true,
+    forceRefresh = false,
+    cacheMaxAge = 60,
+    searchPaths,
+    maxDepth = 4,
+    exclude,
+    onProgress
+  } = options;
+
+  const log = (msg) => onProgress && onProgress(msg);
+
+  // Try to use cache unless forceRefresh
+  if (useCache && !forceRefresh) {
+    const cache = await loadScanCache();
+    
+    if (cache && isScanCacheValid(cache, cacheMaxAge)) {
+      // Verify cached directories still exist
+      const validDirs = [];
+      for (const dir of cache.dirs) {
+        if (existsSync(join(dir, '.claude'))) {
+          validDirs.push(dir);
+        }
+      }
+      
+      log(`Using cached results (${validDirs.length} dirs, scanned ${cache.scannedAt})`);
+      
+      return {
+        dirs: validDirs,
+        fromCache: true,
+        scannedAt: cache.scannedAt,
+        cacheAge: Math.round((new Date() - new Date(cache.scannedAt)) / (1000 * 60))
+      };
+    }
+  }
+
+  // Fresh scan
+  log('Performing fresh scan...');
+  const dirs = await findClaudeDirs({ searchPaths, maxDepth, exclude });
+  
+  // Save to cache
+  const cache = await saveScanCache({
+    dirs,
+    searchPaths: searchPaths || ['default'],
+    maxDepth,
+    exclude: exclude || ['default']
+  });
+
+  return {
+    dirs,
+    fromCache: false,
+    scannedAt: cache.scannedAt,
+    cacheAge: 0
+  };
+}
+
+/**
+ * Clear scan cache
+ */
+export async function clearScanCache() {
+  try {
+    await rm(SCAN_CACHE_FILE, { force: true });
+    return { cleared: true };
+  } catch {
+    return { cleared: false };
+  }
+}
+
+/**
+ * Get scan cache info
+ * @returns {Promise<{exists: boolean, dirs?: number, scannedAt?: string, ageMinutes?: number}>}
+ */
+export async function getScanCacheInfo() {
+  const cache = await loadScanCache();
+  
+  if (!cache) {
+    return { exists: false };
+  }
+
+  const scannedAt = new Date(cache.scannedAt);
+  const now = new Date();
+  const ageMinutes = Math.round((now - scannedAt) / (1000 * 60));
+
+  return {
+    exists: true,
+    dirs: cache.dirs?.length || 0,
+    scannedAt: cache.scannedAt,
+    ageMinutes,
+    searchPaths: cache.searchPaths,
+    maxDepth: cache.maxDepth,
+    isValid: isScanCacheValid(cache)
+  };
+}
+
+/**
  * Find all directories containing .claude subdirectory
  * @param {Object} options - Scan options
  * @param {string[]} options.searchPaths - Paths to search (default: common dev dirs)
@@ -1571,8 +1728,10 @@ export async function runClaudeCommand(dir, args = [], options = {}) {
  * @param {string[]} options.claudeArgs - Arguments to pass to claude command
  * @param {boolean} options.dryRun - Only list directories without running commands
  * @param {boolean} options.sequential - Run sequentially (default true)
+ * @param {boolean} options.useCache - Use cached directories (default true)
+ * @param {boolean} options.forceRefresh - Force fresh scan (default false)
  * @param {Function} options.onProgress - Progress callback
- * @returns {Promise<{dirs: string[], results: Array}>}
+ * @returns {Promise<{dirs: string[], results: Array, fromCache: boolean}>}
  */
 export async function scanLocalClaudeDirs(options = {}) {
   const {
@@ -1582,17 +1741,25 @@ export async function scanLocalClaudeDirs(options = {}) {
     claudeArgs = ['/review'],
     dryRun = false,
     sequential = true,
+    useCache = true,
+    forceRefresh = false,
     onProgress
   } = options;
 
   const log = (msg) => onProgress && onProgress(msg);
 
-  // Find all directories with .claude
-  log('Searching for directories with .claude...');
-  const dirs = await findClaudeDirs({ searchPaths, maxDepth, exclude });
+  // Get directories (with cache support)
+  const { dirs, fromCache, scannedAt } = await getClaudeDirsWithCache({
+    useCache,
+    forceRefresh,
+    searchPaths,
+    maxDepth,
+    exclude,
+    onProgress
+  });
 
   if (dryRun) {
-    return { dirs, results: [] };
+    return { dirs, results: [], fromCache, scannedAt };
   }
 
   const results = [];
@@ -1628,5 +1795,6 @@ export async function scanLocalClaudeDirs(options = {}) {
     results.push(...await Promise.all(promises));
   }
 
-  return { dirs, results };
+  return { dirs, results, fromCache, scannedAt };
 }
+
