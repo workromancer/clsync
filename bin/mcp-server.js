@@ -601,18 +601,21 @@ server.registerTool(
 // Repository Sync Tools
 // =============================================================================
 
-import { 
-  pullFromGitHub, 
+import {
+  pullFromGitHub,
   pushToGitHub,
-  listLocalStaged, 
-  browseRepo, 
+  listLocalStaged,
+  browseRepo,
   applyItem,
   applyAll,
   listRepoItems,
   listPulledRepos,
   promoteItem,
   demoteItem,
-  listBothScopes
+  listBothScopes,
+  linkSkillToCommand,
+  linkSubagentToCommand,
+  linkAll
 } from "../src/repo-sync.js";
 
 server.registerTool(
@@ -882,9 +885,9 @@ server.registerTool(
   async () => {
     try {
       const { project, user } = await listBothScopes();
-      
+
       let text = "👁 Comparing Scopes\n\n";
-      
+
       text += "📁 User (~/.claude):\n";
       if (user.length === 0) {
         text += "   (empty)\n";
@@ -894,7 +897,7 @@ server.registerTool(
           text += `   ${icon} ${item.name}\n`;
         }
       }
-      
+
       text += "\n📁 Project (.claude):\n";
       if (project.length === 0) {
         text += "   (empty)\n";
@@ -904,11 +907,118 @@ server.registerTool(
           text += `   ${icon} ${item.name}\n`;
         }
       }
-      
+
       text += "\nUse promote_setting or demote_setting to move items between scopes.";
       return { content: [{ type: "text", text }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
+    }
+  }
+);
+
+// =============================================================================
+// Link Tools - Connect skills/subagents to slash commands
+// =============================================================================
+
+server.registerTool(
+  "link_skill_to_command",
+  {
+    description: "Link a skill to a slash command for explicit invocation",
+    inputSchema: {
+      skillName: z.string().describe("Name of the skill to link"),
+      commandName: z.string().optional().describe("Custom command name (defaults to skill name)"),
+      scope: z.enum(["user", "project"]).optional().describe("Scope: user (~/.claude) or project (.claude). Default: user"),
+    },
+  },
+  async ({ skillName, commandName, scope = "user" }) => {
+    try {
+      const result = await linkSkillToCommand(skillName, { scope, commandName });
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Linked skill "${result.skill}" to command "/${result.command}"\n\nPath: ${result.path}\n\nYou can now use /${result.command} to explicitly invoke this skill.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "link_subagent_to_command",
+  {
+    description: "Link a subagent to a slash command for explicit invocation",
+    inputSchema: {
+      agentName: z.string().describe("Name of the subagent to link"),
+      commandName: z.string().optional().describe("Custom command name (defaults to agent name)"),
+      scope: z.enum(["user", "project"]).optional().describe("Scope: user (~/.claude) or project (.claude). Default: user"),
+    },
+  },
+  async ({ agentName, commandName, scope = "user" }) => {
+    try {
+      const result = await linkSubagentToCommand(agentName, { scope, commandName });
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Linked subagent "${result.agent}" to command "/${result.command}"\n\nPath: ${result.path}\n\nYou can now use /${result.command} to explicitly invoke this subagent.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "link_all_to_commands",
+  {
+    description: "Link all skills and subagents to slash commands",
+    inputSchema: {
+      scope: z.enum(["user", "project"]).optional().describe("Scope: user (~/.claude) or project (.claude). Default: user"),
+      skillsOnly: z.boolean().optional().describe("Only link skills"),
+      agentsOnly: z.boolean().optional().describe("Only link subagents"),
+    },
+  },
+  async ({ scope = "user", skillsOnly, agentsOnly }) => {
+    try {
+      const results = await linkAll({ scope, skillsOnly, agentsOnly });
+
+      let message = "✅ Linked all items to slash commands\n\n";
+
+      if (results.skills.length > 0) {
+        message += "**Skills:**\n";
+        results.skills.forEach(r => {
+          message += `- ${r.skill} → /${r.command}\n`;
+        });
+        message += "\n";
+      }
+
+      if (results.agents.length > 0) {
+        message += "**Subagents:**\n";
+        results.agents.forEach(r => {
+          message += `- ${r.agent} → /${r.command}\n`;
+        });
+      }
+
+      if (results.skills.length === 0 && results.agents.length === 0) {
+        message += "No skills or subagents found to link.";
+      }
+
+      return {
+        content: [{ type: "text", text: message }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
     }
   }
 );

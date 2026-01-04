@@ -13,6 +13,7 @@ import { mkdir, writeFile, readdir, stat, readFile, cp, rm } from "fs/promises";
 import { join, dirname, basename } from "path";
 import { existsSync } from "fs";
 import os from "os";
+import matter from "gray-matter";
 
 const SETTINGS_DIRS = ["skills", "agents", "output-styles"];
 const CLSYNC_DIR = join(os.homedir(), ".clsync");
@@ -1137,6 +1138,169 @@ export async function listBothScopes() {
     project: projectItems,
     user: userItems,
   };
+}
+
+// =============================================================================
+// LINK SKILLS/SUBAGENTS TO SLASH COMMANDS
+// =============================================================================
+
+/**
+ * Link a skill to a slash command
+ * @param {string} skillName - Name of the skill
+ * @param {Object} options - Options
+ * @param {string} options.scope - "user" or "project" (default: "user")
+ * @param {string} options.commandName - Custom command name (optional)
+ * @returns {Promise<{success: boolean, skill: string, command: string, path: string}>}
+ */
+export async function linkSkillToCommand(skillName, options = {}) {
+  const { scope = "user", commandName } = options;
+
+  // 1. Skill 존재 확인
+  const skillDir = join(getClaudeDir(scope), "skills", skillName);
+  if (!existsSync(skillDir)) {
+    throw new Error(`Skill "${skillName}" not found in ${scope} scope`);
+  }
+
+  // 2. SKILL.md 파일 읽어서 description 추출
+  const skillMd = join(skillDir, "SKILL.md");
+  if (!existsSync(skillMd)) {
+    throw new Error(`SKILL.md not found in skill "${skillName}"`);
+  }
+
+  const content = await readFile(skillMd, "utf8");
+  const { data: frontmatter } = matter(content);
+
+  if (!frontmatter.description) {
+    throw new Error(`Skill "${skillName}" has no description in SKILL.md`);
+  }
+
+  // 3. Slash command 파일 생성
+  const cmdName = commandName || skillName;
+  const commandsDir = join(getClaudeDir(scope), "commands");
+  await mkdir(commandsDir, { recursive: true });
+
+  const commandFile = join(commandsDir, `${cmdName}.md`);
+  const commandContent = `---
+description: ${frontmatter.description}
+---
+
+Use the ${skillName} skill to help with this task.
+
+$ARGUMENTS
+`;
+
+  await writeFile(commandFile, commandContent, "utf8");
+
+  return {
+    success: true,
+    skill: skillName,
+    command: cmdName,
+    path: commandFile,
+  };
+}
+
+/**
+ * Link a subagent to a slash command
+ * @param {string} agentName - Name of the subagent
+ * @param {Object} options - Options
+ * @param {string} options.scope - "user" or "project" (default: "user")
+ * @param {string} options.commandName - Custom command name (optional)
+ * @returns {Promise<{success: boolean, agent: string, command: string, path: string}>}
+ */
+export async function linkSubagentToCommand(agentName, options = {}) {
+  const { scope = "user", commandName } = options;
+
+  // 1. Subagent 존재 확인
+  const agentFile = join(getClaudeDir(scope), "agents", `${agentName}.md`);
+  if (!existsSync(agentFile)) {
+    throw new Error(`Subagent "${agentName}" not found in ${scope} scope`);
+  }
+
+  // 2. AGENT.md 파일 읽어서 description 추출
+  const content = await readFile(agentFile, "utf8");
+  const { data: frontmatter } = matter(content);
+
+  if (!frontmatter.description) {
+    throw new Error(`Subagent "${agentName}" has no description`);
+  }
+
+  // 3. Slash command 파일 생성
+  const cmdName = commandName || agentName;
+  const commandsDir = join(getClaudeDir(scope), "commands");
+  await mkdir(commandsDir, { recursive: true });
+
+  const commandFile = join(commandsDir, `${cmdName}.md`);
+  const commandContent = `---
+description: ${frontmatter.description}
+---
+
+Use the ${agentName} subagent to handle this task.
+
+$ARGUMENTS
+`;
+
+  await writeFile(commandFile, commandContent, "utf8");
+
+  return {
+    success: true,
+    agent: agentName,
+    command: cmdName,
+    path: commandFile,
+  };
+}
+
+/**
+ * Link all skills and subagents to slash commands
+ * @param {Object} options - Options
+ * @param {string} options.scope - "user" or "project" (default: "user")
+ * @param {boolean} options.skillsOnly - Only link skills
+ * @param {boolean} options.agentsOnly - Only link agents
+ * @returns {Promise<{skills: Array, agents: Array}>}
+ */
+export async function linkAll(options = {}) {
+  const { scope = "user", skillsOnly, agentsOnly } = options;
+  const results = { skills: [], agents: [] };
+
+  // Link skills
+  if (!agentsOnly) {
+    const skillsDir = join(getClaudeDir(scope), "skills");
+    if (existsSync(skillsDir)) {
+      const entries = await readdir(skillsDir, { withFileTypes: true });
+      const skillNames = entries.filter(e => e.isDirectory()).map(e => e.name);
+
+      for (const skillName of skillNames) {
+        try {
+          const result = await linkSkillToCommand(skillName, { scope });
+          results.skills.push(result);
+        } catch (error) {
+          // Skip skills that can't be linked (e.g., missing description)
+          console.error(`Warning: Failed to link skill ${skillName}: ${error.message}`);
+        }
+      }
+    }
+  }
+
+  // Link agents
+  if (!skillsOnly) {
+    const agentsDir = join(getClaudeDir(scope), "agents");
+    if (existsSync(agentsDir)) {
+      const agentFiles = await readdir(agentsDir);
+      for (const file of agentFiles) {
+        if (file.endsWith(".md")) {
+          const agentName = file.replace(".md", "");
+          try {
+            const result = await linkSubagentToCommand(agentName, { scope });
+            results.agents.push(result);
+          } catch (error) {
+            // Skip agents that can't be linked (e.g., missing description)
+            console.error(`Warning: Failed to link agent ${agentName}: ${error.message}`);
+          }
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 // =============================================================================

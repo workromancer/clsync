@@ -7,7 +7,7 @@ import os from "os";
 import { join } from "path";
 import { loadConfig } from "../src/config.js";
 import { trackDocs } from "../src/index.js";
-import { 
+import {
   initClsync,
   stageItem,
   stageAll,
@@ -38,7 +38,10 @@ import {
   getClaudeDirsWithCache,
   getScanCacheInfo,
   clearScanCache,
-  scanItems
+  scanItems,
+  linkSkillToCommand,
+  linkSubagentToCommand,
+  linkAll
 } from "../src/repo-sync.js";
 
 // Get terminal width
@@ -1889,7 +1892,89 @@ program
       console.log(chalk.dim('  Commands:'));
       console.log(chalk.dim('    clsync promote <name>  # project → user'));
       console.log(chalk.dim('    clsync demote <name>   # user → project\n'));
-      
+
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// LINK: Link skills/subagents to slash commands
+// ============================================================================
+program
+  .command("link [type] [name]")
+  .description("Link skills/subagents to slash commands")
+  .option("-u, --user", "User scope (default)", true)
+  .option("-p, --project", "Project scope")
+  .option("-a, --all", "Link all skills and agents")
+  .option("--skills-only", "Only link skills (with --all)")
+  .option("--agents-only", "Only link agents (with --all)")
+  .option("-n, --name <custom-name>", "Custom slash command name")
+  .action(async (type, name, options) => {
+    try {
+      const scope = options.project ? "project" : "user";
+      const spinner = ora();
+
+      // Link all
+      if (options.all) {
+        spinner.start("Linking all skills and agents...");
+        const results = await linkAll({
+          scope,
+          skillsOnly: options.skillsOnly,
+          agentsOnly: options.agentsOnly
+        });
+        spinner.succeed();
+
+        console.log(chalk.cyan("\n  📋 Linking Results:\n"));
+        if (results.skills.length > 0) {
+          console.log(chalk.bold("  Skills:"));
+          results.skills.forEach(r => {
+            console.log(chalk.dim(`    ✓ ${r.skill} → /${r.command}`));
+          });
+        }
+        if (results.agents.length > 0) {
+          console.log(chalk.bold("\n  Subagents:"));
+          results.agents.forEach(r => {
+            console.log(chalk.dim(`    ✓ ${r.agent} → /${r.command}`));
+          });
+        }
+        console.log();
+
+        showSuccess('All links created!');
+        return;
+      }
+
+      // Validate arguments
+      if (!type || !name) {
+        showError("Usage: clsync link <skill|agent> <name>");
+        process.exit(1);
+      }
+
+      // Link single item
+      let result;
+      if (type === "skill") {
+        spinner.start(`Linking skill "${name}"...`);
+        result = await linkSkillToCommand(name, {
+          scope,
+          commandName: options.name
+        });
+        spinner.succeed();
+        console.log(chalk.dim(`\n  ✓ Linked: ${result.skill} → /${result.command}\n`));
+      } else if (type === "agent") {
+        spinner.start(`Linking subagent "${name}"...`);
+        result = await linkSubagentToCommand(name, {
+          scope,
+          commandName: options.name
+        });
+        spinner.succeed();
+        console.log(chalk.dim(`\n  ✓ Linked: ${result.agent} → /${result.command}\n`));
+      } else {
+        showError(`Unknown type "${type}". Use "skill" or "agent"`);
+        process.exit(1);
+      }
+
+      showSuccess('Link created!');
     } catch (error) {
       showError(error.message);
       process.exit(1);
