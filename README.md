@@ -51,7 +51,9 @@
 | 📤 **Stage & Apply**          | Stage settings locally, apply them anywhere                   |
 | 🎯 **Full Extension Support** | Manage Skills, Agents, and Output Styles                      |
 | 🔀 **Promote / Demote**       | Move settings between project and user scope                  |
-| 🔌 **MCP Integration**        | Native Claude Code integration via MCP Server                 |
+| 🔗 **Link to Slash Commands** | Convert skills/agents into explicit slash commands            |
+| 🔍 **Local Project Scan**     | Find and manage all .claude directories on your machine       |
+| 🔌 **MCP Integration**        | Native Claude Code integration via MCP Server (37 tools)      |
 
 ### CLI Features
 
@@ -171,6 +173,27 @@ cd my-settings && git init && git add . && git push
 | `clsync promote <name> -r <new>` | Rename to avoid conflict          |
 | `clsync demote <name>`           | Move: `~/.claude` → `.claude`     |
 
+### Link Commands
+
+| Command                               | Description                            |
+| ------------------------------------- | -------------------------------------- |
+| `clsync link skill <name>`            | Link skill to slash command            |
+| `clsync link agent <name>`            | Link subagent to slash command         |
+| `clsync link --all`                   | Link all skills and agents             |
+| `clsync link --all --skills-only`     | Link only skills                       |
+| `clsync link --all --agents-only`     | Link only agents                       |
+| `clsync link skill <name> -p`         | Link in project scope                  |
+| `clsync link skill <name> -n <custom>` | Link with custom command name          |
+
+### Scan Commands
+
+| Command                | Description                         |
+| ---------------------- | ----------------------------------- |
+| `clsync scan`          | Find all local .claude directories  |
+| `clsync scan -p <dir>` | Scan specific directory             |
+| `clsync scan -c`       | Clear scan cache                    |
+| `clsync scan -i`       | Show cache info                     |
+
 ### Export Commands
 
 | Command                           | Description                 |
@@ -227,7 +250,14 @@ Run `clsync` without arguments to enter interactive mode:
 claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 ```
 
-### Available Tools
+### Available Tools (37 total)
+
+#### Init & Status Tools
+
+| Tool           | Description                         |
+| -------------- | ----------------------------------- |
+| `init_clsync`  | Initialize ~/.clsync directory      |
+| `get_status`   | Get current clsync status           |
 
 #### Documentation Tools
 
@@ -255,15 +285,29 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 | `read_subagent`      | Read subagent content           |
 | `list_output_styles` | List output styles              |
 
+#### Stage & Unstage Tools
+
+| Tool           | Description                           |
+| -------------- | ------------------------------------- |
+| `stage_item`   | Stage item from ~/.claude or .claude  |
+| `stage_all`    | Stage all items                       |
+| `unstage_item` | Remove item from staging              |
+| `list_staged`  | List staged items                     |
+
 #### Repository Tools
 
 | Tool            | Description                 |
 | --------------- | --------------------------- |
 | `pull_settings` | Pull from GitHub repository |
+| `push_settings` | Push to GitHub repository   |
 | `browse_repo`   | Browse repository contents  |
-| `apply_setting` | Apply setting from staging  |
-| `list_staged`   | List staged items           |
 | `list_repos`    | List pulled repositories    |
+
+#### Apply Tools
+
+| Tool            | Description                |
+| --------------- | -------------------------- |
+| `apply_setting` | Apply setting from staging |
 
 #### Scope Tools
 
@@ -272,6 +316,38 @@ claude mcp add clsync --transport stdio -- npx -y clsync-mcp
 | `promote_setting` | Move project → user               |
 | `demote_setting`  | Move user → project               |
 | `compare_scopes`  | Compare user and project settings |
+
+#### Link Tools
+
+| Tool                     | Description                         |
+| ------------------------ | ----------------------------------- |
+| `link_skill_to_command`  | Link skill to slash command         |
+| `link_subagent_to_command` | Link subagent to slash command    |
+| `link_all_to_commands`   | Link all skills and agents          |
+
+#### Export & Local Tools
+
+| Tool                | Description                      |
+| ------------------- | -------------------------------- |
+| `export_for_push`   | Export staged items for git push |
+| `link_local_repo`   | Link GitHub repo to local        |
+| `unlink_local_repo` | Unlink GitHub repo               |
+| `get_local_info`    | Get local staging info           |
+
+#### Online Registry Tools
+
+| Tool                | Description                         |
+| ------------------- | ----------------------------------- |
+| `list_online_repos` | List online registry repositories   |
+| `pull_online_repo`  | Pull from online registry           |
+
+#### Scan Tools
+
+| Tool                  | Description                  |
+| --------------------- | ---------------------------- |
+| `scan_claude_dirs`    | Scan for .claude directories |
+| `get_scan_cache_info` | Get scan cache information   |
+| `clear_scan_cache`    | Clear scan cache             |
 
 ---
 
@@ -382,6 +458,29 @@ clsync promote my-skill
 # Demote user setting to project (make local)
 clsync demote my-agent
 ```
+
+### Link: Create Slash Commands
+
+```bash
+# Link a single skill to slash command
+clsync link skill alarm
+# Now use /alarm in Claude Code
+
+# Link a subagent to slash command
+clsync link agent code-reviewer
+# Now use /code-reviewer in Claude Code
+
+# Link all skills and agents at once
+clsync link --all
+
+# Link only skills
+clsync link --all --skills-only
+
+# Link in project scope
+clsync link skill my-skill --project
+```
+
+**Use Case:** Convert auto-invoked skills into explicitly callable slash commands for more control.
 
 ---
 
