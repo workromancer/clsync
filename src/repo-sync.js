@@ -424,7 +424,7 @@ function parseMetadata(content) {
 /**
  * Scan items in a directory
  */
-async function scanItems(baseDir) {
+export async function scanItems(baseDir) {
   const items = [];
 
   for (const dir of SETTINGS_DIRS) {

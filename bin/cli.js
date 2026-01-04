@@ -37,7 +37,8 @@ import {
   scanLocalClaudeDirs,
   getClaudeDirsWithCache,
   getScanCacheInfo,
-  clearScanCache
+  clearScanCache,
+  scanItems
 } from "../src/repo-sync.js";
 
 // Get terminal width
@@ -166,6 +167,7 @@ async function interactiveMode(isFirstRun = true) {
         { name: '🔍 Pull new repository', value: 'pull' },
         { name: '🌐 Browse online repositories', value: 'online' },
         { name: '🔀 Compare scopes (user vs project)', value: 'scopes' },
+        { name: '📁 Scan local Claude projects', value: 'scan' },
         { name: '❓ Help', value: 'help' },
         { name: '👋 Exit', value: 'exit' }
       ]
@@ -190,6 +192,9 @@ async function interactiveMode(isFirstRun = true) {
       break;
     case 'scopes':
       await scopesInteractive();
+      break;
+    case 'scan':
+      await scanInteractive();
       break;
     case 'help':
       program.help();
@@ -533,6 +538,458 @@ async function scopesInteractive() {
   console.log();
   
   await backToMenu();
+}
+
+async function scanInteractive() {
+  console.log(chalk.cyan('\n  📁 Scan Local Claude Projects\n'));
+  
+  // Get cached directories
+  const { dirs, fromCache, cacheAge } = await getClaudeDirsWithCache({
+    useCache: true,
+    forceRefresh: false
+  });
+  
+  const homeDir = os.homedir();
+  
+  // Show project list first
+  if (dirs.length > 0) {
+    console.log(chalk.white.bold('  📋 Cached Projects') + chalk.dim(` (${dirs.length}, cached ${cacheAge}m ago)`));
+    console.log();
+    
+    for (let i = 0; i < dirs.length; i++) {
+      const dir = dirs[i];
+      const displayPath = dir.startsWith(homeDir) ? dir.replace(homeDir, '~') : dir;
+      console.log(chalk.dim(`     ${String(i + 1).padStart(2)}. ${displayPath}`));
+    }
+    console.log();
+  } else {
+    console.log(chalk.yellow('  No cached projects found.\n'));
+  }
+  
+  // Build choices
+  const choices = [];
+  
+  // Add project selection options if projects exist
+  if (dirs.length > 0) {
+    for (let i = 0; i < dirs.length; i++) {
+      const dir = dirs[i];
+      const displayPath = dir.startsWith(homeDir) ? dir.replace(homeDir, '~') : dir;
+      choices.push({ 
+        name: `📁 ${displayPath}`, 
+        value: { type: 'project', dir } 
+      });
+    }
+  }
+  
+  // Add actions
+  choices.push({ name: '🔍 Scan for projects (refresh)', value: { type: 'action', action: 'scan' } });
+  choices.push({ name: '🗑️  Clear cache', value: { type: 'action', action: 'clear' } });
+  choices.push({ name: '← Back', value: { type: 'action', action: 'back' } });
+  
+  const { selected } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'selected',
+      message: dirs.length > 0 ? 'Select project or action:' : 'Select action:',
+      choices,
+      pageSize: 20
+    }
+  ]);
+  
+  if (selected.type === 'project') {
+    await showProjectDetails(selected.dir);
+  } else {
+    switch (selected.action) {
+      case 'scan':
+        await scanProjectsInteractive();
+        break;
+      case 'clear':
+        await clearScanCache();
+        console.log(chalk.green('\n  ✓ Cache cleared\n'));
+        await scanInteractive();
+        break;
+      case 'back':
+        await interactiveMode(false);
+        break;
+    }
+  }
+}
+
+async function scanProjectsInteractive() {
+  const spinner = ora('Scanning for .claude directories...').start();
+  
+  const { dirs, fromCache, cacheAge } = await getClaudeDirsWithCache({
+    useCache: false,
+    forceRefresh: true
+  });
+  
+  spinner.succeed(`Found ${dirs.length} projects ${chalk.dim('(cached)')}`);
+  console.log();
+  
+  if (dirs.length === 0) {
+    console.log(chalk.yellow('  No directories with .claude found.\n'));
+    console.log(chalk.dim('  Tips:'));
+    console.log(chalk.dim('    - Check if you have any Claude Code projects'));
+    console.log(chalk.dim('    - Use CLI for custom paths: clsync scan -p ~/Projects\n'));
+    await backToMenu();
+    return;
+  }
+  
+  // Display found directories
+  console.log(chalk.white.bold('  📁 Found Projects:\n'));
+  const homeDir = os.homedir();
+  for (let i = 0; i < Math.min(dirs.length, 10); i++) {
+    const dir = dirs[i];
+    const displayPath = dir.startsWith(homeDir) ? dir.replace(homeDir, '~') : dir;
+    console.log(chalk.dim(`     ${String(i + 1).padStart(2)}. ${displayPath}`));
+  }
+  if (dirs.length > 10) {
+    console.log(chalk.dim(`     ... and ${dirs.length - 10} more`));
+  }
+  console.log();
+  
+  await backToMenu();
+}
+
+async function browseProjectsInteractive(page = 0) {
+  const { dirs, fromCache, cacheAge } = await getClaudeDirsWithCache({
+    useCache: true,
+    forceRefresh: false
+  });
+  
+  if (dirs.length === 0) {
+    console.log(chalk.yellow('\n  No projects in cache.\n'));
+    console.log(chalk.dim('  Run "Scan for .claude projects" first.\n'));
+    await backToMenu();
+    return;
+  }
+  
+  const homeDir = os.homedir();
+  const pageSize = 10;
+  const totalPages = Math.ceil(dirs.length / pageSize);
+  const currentPage = Math.min(Math.max(0, page), totalPages - 1);
+  const startIdx = currentPage * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, dirs.length);
+  const pageDirs = dirs.slice(startIdx, endIdx);
+  
+  console.log(chalk.dim(`\n  📦 ${dirs.length} projects ${fromCache ? `(cached ${cacheAge}m ago)` : '(fresh)'}`));
+  console.log(chalk.dim(`  📄 Page ${currentPage + 1}/${totalPages}\n`));
+  
+  const choices = [
+    ...pageDirs.map((dir, i) => {
+      const displayPath = dir.startsWith(homeDir) ? dir.replace(homeDir, '~') : dir;
+      const globalIdx = startIdx + i + 1;
+      return { name: `${String(globalIdx).padStart(2)}. ${displayPath}`, value: dir };
+    }),
+    new inquirer.Separator()
+  ];
+  
+  // Navigation options
+  if (totalPages > 1) {
+    if (currentPage > 0) {
+      choices.push({ name: '◀ Previous page', value: '__prev__' });
+    }
+    if (currentPage < totalPages - 1) {
+      choices.push({ name: '▶ Next page', value: '__next__' });
+    }
+  }
+  choices.push({ name: '← Back', value: null });
+  
+  const { selectedDir } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'selectedDir',
+      message: 'Select a project:',
+      choices,
+      pageSize: 15
+    }
+  ]);
+  
+  if (selectedDir === '__prev__') {
+    await browseProjectsInteractive(currentPage - 1);
+    return;
+  }
+  if (selectedDir === '__next__') {
+    await browseProjectsInteractive(currentPage + 1);
+    return;
+  }
+  if (!selectedDir) {
+    await scanInteractive();
+    return;
+  }
+  
+  // Show project details with settings
+  await showProjectDetails(selectedDir);
+}
+
+async function showProjectDetails(projectDir) {
+  const homeDir = os.homedir();
+  const displayPath = projectDir.startsWith(homeDir) ? projectDir.replace(homeDir, '~') : projectDir;
+  const claudeDir = join(projectDir, '.claude');
+  
+  console.log(chalk.cyan(`\n  📁 Project: ${displayPath}\n`));
+  
+  // Scan project-level settings
+  let projectItems = [];
+  try {
+    projectItems = await scanItems(claudeDir);
+  } catch {
+    projectItems = [];
+  }
+  
+  // Categorize items
+  const skills = projectItems.filter(i => i.type === 'skill');
+  const agents = projectItems.filter(i => i.type === 'agent');
+  const styles = projectItems.filter(i => i.type === 'output-style');
+  
+  // Also check for slash commands (commands directory)
+  const { readdir: readdirAsync } = await import('fs/promises');
+  let commands = [];
+  try {
+    const commandsDir = join(claudeDir, 'commands');
+    const commandFiles = await readdirAsync(commandsDir);
+    commands = commandFiles
+      .filter(f => f.endsWith('.md'))
+      .map(f => ({ name: f.replace('.md', ''), type: 'command' }));
+  } catch {
+    // No commands directory
+  }
+  
+  // Display settings
+  if (skills.length > 0) {
+    console.log(chalk.white.bold('  🎯 Skills'));
+    for (const s of skills) {
+      console.log(chalk.dim(`     - ${s.name}`));
+    }
+    console.log();
+  }
+  
+  if (agents.length > 0) {
+    console.log(chalk.white.bold('  🤖 Subagents'));
+    for (const a of agents) {
+      console.log(chalk.dim(`     - ${a.name}`));
+    }
+    console.log();
+  }
+  
+  if (commands.length > 0) {
+    console.log(chalk.white.bold('  ⚡ Slash Commands'));
+    for (const c of commands) {
+      console.log(chalk.dim(`     - /${c.name}`));
+    }
+    console.log();
+  }
+  
+  if (styles.length > 0) {
+    console.log(chalk.white.bold('  ✨ Output Styles'));
+    for (const s of styles) {
+      console.log(chalk.dim(`     - ${s.name}`));
+    }
+    console.log();
+  }
+  
+  const allItems = [...skills, ...agents, ...styles];
+  const totalItems = allItems.length + commands.length;
+  
+  if (totalItems === 0) {
+    console.log(chalk.dim('  (No project-level settings found)\n'));
+  }
+  
+  // Build action choices
+  const choices = [];
+  
+  // Add promote options for project items (only skills, agents, output-styles can be promoted)
+  if (allItems.length > 0) {
+    choices.push({ name: '📤 Promote setting to user level (~/.claude)', value: 'promote' });
+  }
+  
+  // Add demote option (needs to check user-level items)
+  choices.push({ name: '📥 Demote setting from user level', value: 'demote' });
+  
+  // Other actions
+  choices.push({ name: '📋 Copy path to clipboard', value: 'copy' });
+  choices.push({ name: '📂 Open in Finder', value: 'open' });
+  choices.push({ name: '🤖 Run claude here', value: 'claude' });
+  choices.push({ name: '💻 Print cd command', value: 'cd' });
+  choices.push({ name: '← Back', value: 'back' });
+  
+  const { projectAction } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'projectAction',
+      message: 'What would you like to do?',
+      choices
+    }
+  ]);
+  
+  if (projectAction === 'back') {
+    await scanInteractive();
+    return;
+  }
+  
+  if (projectAction === 'promote') {
+    await promoteFromProject(projectDir, allItems);
+    return;
+  }
+  
+  if (projectAction === 'demote') {
+    await demoteToProject(projectDir);
+    return;
+  }
+  
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execPromise = promisify(exec);
+  const { spawn } = await import('child_process');
+  
+  switch (projectAction) {
+    case 'copy':
+      const copyCmd = process.platform === 'darwin' ? 'pbcopy' : 
+                     process.platform === 'win32' ? 'clip' : 'xclip -selection clipboard';
+      await execPromise(`echo -n "${projectDir}" | ${copyCmd}`);
+      console.log(chalk.green(`\n  ✓ Copied to clipboard: ${displayPath}\n`));
+      break;
+      
+    case 'open':
+      const openCmd = process.platform === 'darwin' ? 'open' : 
+                     process.platform === 'win32' ? 'explorer' : 'xdg-open';
+      await execPromise(`${openCmd} "${projectDir}"`);
+      console.log(chalk.green(`\n  ✓ Opened: ${displayPath}\n`));
+      break;
+      
+    case 'claude':
+      console.log(chalk.cyan(`\n  🤖 Starting Claude in: ${displayPath}\n`));
+      exitAltScreen();
+      showCursor();
+      spawn('claude', [], {
+        cwd: projectDir,
+        stdio: 'inherit',
+        shell: true
+      });
+      return; // Exit interactive mode
+      
+    case 'cd':
+      console.log(chalk.cyan(`\n  💡 Run this command:\n`));
+      console.log(chalk.white.bold(`     cd "${projectDir}"\n`));
+      break;
+  }
+  
+  await showProjectDetails(projectDir);
+}
+
+async function promoteFromProject(projectDir, projectItems) {
+  const homeDir = os.homedir();
+  const displayPath = projectDir.startsWith(homeDir) ? projectDir.replace(homeDir, '~') : projectDir;
+  
+  console.log(chalk.cyan(`\n  📤 Promote to User Level (~/.claude)\n`));
+  console.log(chalk.dim(`  From: ${displayPath}/.claude\n`));
+  
+  if (projectItems.length === 0) {
+    console.log(chalk.yellow('  No promotable items found.\n'));
+    await showProjectDetails(projectDir);
+    return;
+  }
+  
+  const choices = projectItems.map(item => {
+    const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+    return { name: `${icon} ${item.name} (${item.type})`, value: item.name };
+  });
+  choices.push({ name: '← Cancel', value: null });
+  
+  const { itemToPromote } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'itemToPromote',
+      message: 'Select item to promote:',
+      choices
+    }
+  ]);
+  
+  if (!itemToPromote) {
+    await showProjectDetails(projectDir);
+    return;
+  }
+  
+  // Change to project directory temporarily and promote
+  const originalCwd = process.cwd();
+  try {
+    process.chdir(projectDir);
+    
+    const spinner = ora(`Promoting ${itemToPromote}...`).start();
+    const result = await promoteItem(itemToPromote, { force: false });
+    spinner.succeed(`Promoted: ${result.newName}`);
+    
+    console.log(chalk.dim(`\n  ✓ ${result.item.type}: ${result.newName}`));
+    console.log(chalk.dim(`  Now available globally in ~/.claude\n`));
+  } catch (error) {
+    console.log(chalk.red(`\n  ✗ ${error.message}\n`));
+  } finally {
+    process.chdir(originalCwd);
+  }
+  
+  await showProjectDetails(projectDir);
+}
+
+async function demoteToProject(projectDir) {
+  const homeDir = os.homedir();
+  const displayPath = projectDir.startsWith(homeDir) ? projectDir.replace(homeDir, '~') : projectDir;
+  const userClaudeDir = join(homeDir, '.claude');
+  
+  console.log(chalk.cyan(`\n  📥 Demote to Project Level\n`));
+  console.log(chalk.dim(`  To: ${displayPath}/.claude\n`));
+  
+  // Scan user-level settings
+  let userItems = [];
+  try {
+    userItems = await scanItems(userClaudeDir);
+  } catch {
+    userItems = [];
+  }
+  
+  if (userItems.length === 0) {
+    console.log(chalk.yellow('  No user-level items found to demote.\n'));
+    await showProjectDetails(projectDir);
+    return;
+  }
+  
+  const choices = userItems.map(item => {
+    const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+    return { name: `${icon} ${item.name} (${item.type})`, value: item.name };
+  });
+  choices.push({ name: '← Cancel', value: null });
+  
+  const { itemToDemote } = await inquirer.prompt([
+    {
+      type: 'rawlist',
+      name: 'itemToDemote',
+      message: 'Select item to demote:',
+      choices
+    }
+  ]);
+  
+  if (!itemToDemote) {
+    await showProjectDetails(projectDir);
+    return;
+  }
+  
+  // Change to project directory temporarily and demote
+  const originalCwd = process.cwd();
+  try {
+    process.chdir(projectDir);
+    
+    const spinner = ora(`Demoting ${itemToDemote}...`).start();
+    const result = await demoteItem(itemToDemote, { force: false });
+    spinner.succeed(`Demoted: ${result.newName}`);
+    
+    console.log(chalk.dim(`\n  ✓ ${result.item.type}: ${result.newName}`));
+    console.log(chalk.dim(`  Now project-specific in .claude\n`));
+  } catch (error) {
+    console.log(chalk.red(`\n  ✗ ${error.message}\n`));
+  } finally {
+    process.chdir(originalCwd);
+  }
+  
+  await showProjectDetails(projectDir);
 }
 
 async function backToMenu() {
