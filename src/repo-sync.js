@@ -109,7 +109,7 @@ async function updateLocalClsyncJson() {
 // GITHUB ACCOUNT & LOCAL REPOSITORY LINK
 // =============================================================================
 
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 
 /**
  * Check if gh CLI is installed
@@ -1428,4 +1428,205 @@ export async function pushToGitHub(scope = "local", options = {}) {
       instructions: `Files prepared at: ${tempDir}\n\nTo push manually:\n  cd ${tempDir}\n  git remote add origin https://github.com/YOUR/REPO.git\n  git push -u origin main`,
     };
   }
+}
+
+// =============================================================================
+// SCAN LOCAL .claude DIRECTORIES
+// =============================================================================
+
+/**
+ * Find all directories containing .claude subdirectory
+ * @param {Object} options - Scan options
+ * @param {string[]} options.searchPaths - Paths to search (default: common dev dirs)
+ * @param {number} options.maxDepth - Maximum directory depth to search (default: 4)
+ * @param {string[]} options.exclude - Patterns to exclude
+ * @returns {Promise<string[]>} - List of directories containing .claude
+ */
+export async function findClaudeDirs(options = {}) {
+  const {
+    searchPaths = [
+      os.homedir(),
+      join(os.homedir(), "Documents"),
+      join(os.homedir(), "Projects"),
+      join(os.homedir(), "Developer"),
+      join(os.homedir(), "dev"),
+      join(os.homedir(), "workspace"),
+      join(os.homedir(), "src"),
+      join(os.homedir(), "code"),
+    ],
+    maxDepth = 4,
+    exclude = ["node_modules", ".git", "Library", ".Trash", "Applications"]
+  } = options;
+
+  const claudeDirs = [];
+  const visited = new Set();
+
+  async function searchDir(dir, depth = 0) {
+    if (depth > maxDepth) return;
+    
+    const realPath = await stat(dir).catch(() => null);
+    if (!realPath || !realPath.isDirectory()) return;
+    
+    // Avoid symlink loops
+    const fullPath = await stat(dir).then(() => dir).catch(() => null);
+    if (!fullPath || visited.has(fullPath)) return;
+    visited.add(fullPath);
+
+    try {
+      const entries = await readdir(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (exclude.some(e => entry.name === e || entry.name.startsWith('.'))) continue;
+        
+        const entryPath = join(dir, entry.name);
+        
+        // Check if this directory has .claude subdirectory
+        if (entry.name === '.claude') {
+          // Parent directory has .claude
+          claudeDirs.push(dir);
+          continue;
+        }
+        
+        // Check if subdirectory contains .claude
+        const claudeSubdir = join(entryPath, '.claude');
+        if (existsSync(claudeSubdir)) {
+          claudeDirs.push(entryPath);
+        }
+        
+        // Continue searching deeper
+        await searchDir(entryPath, depth + 1);
+      }
+    } catch {
+      // Permission denied or other errors
+    }
+  }
+
+  // Search each base path
+  for (const searchPath of searchPaths) {
+    if (existsSync(searchPath)) {
+      await searchDir(searchPath, 0);
+    }
+  }
+
+  // Remove duplicates and sort
+  return [...new Set(claudeDirs)].sort();
+}
+
+/**
+ * Run claude command on a directory
+ * @param {string} dir - Directory path
+ * @param {string[]} args - Additional claude command arguments
+ * @param {Object} options - Options
+ * @param {Function} options.onStdout - Stdout callback
+ * @param {Function} options.onStderr - Stderr callback
+ * @param {boolean} options.interactive - Run in interactive mode
+ * @returns {Promise<{code: number, stdout: string, stderr: string}>}
+ */
+export async function runClaudeCommand(dir, args = [], options = {}) {
+  const { onStdout, onStderr, interactive = false } = options;
+  
+  return new Promise((resolve, reject) => {
+    const allArgs = [...args];
+    
+    const proc = spawn('claude', allArgs, {
+      cwd: dir,
+      stdio: interactive ? 'inherit' : 'pipe',
+      shell: true
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    if (!interactive) {
+      proc.stdout?.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+        if (onStdout) onStdout(text);
+      });
+
+      proc.stderr?.on('data', (data) => {
+        const text = data.toString();
+        stderr += text;
+        if (onStderr) onStderr(text);
+      });
+    }
+
+    proc.on('error', (error) => {
+      reject(new Error(`Failed to run claude command: ${error.message}`));
+    });
+
+    proc.on('close', (code) => {
+      resolve({ code: code || 0, stdout, stderr });
+    });
+  });
+}
+
+/**
+ * Scan all local directories with .claude and run claude command
+ * @param {Object} options - Scan options
+ * @param {string[]} options.searchPaths - Paths to search
+ * @param {number} options.maxDepth - Maximum search depth
+ * @param {string[]} options.exclude - Patterns to exclude
+ * @param {string[]} options.claudeArgs - Arguments to pass to claude command
+ * @param {boolean} options.dryRun - Only list directories without running commands
+ * @param {boolean} options.sequential - Run sequentially (default true)
+ * @param {Function} options.onProgress - Progress callback
+ * @returns {Promise<{dirs: string[], results: Array}>}
+ */
+export async function scanLocalClaudeDirs(options = {}) {
+  const {
+    searchPaths,
+    maxDepth = 4,
+    exclude,
+    claudeArgs = ['/review'],
+    dryRun = false,
+    sequential = true,
+    onProgress
+  } = options;
+
+  const log = (msg) => onProgress && onProgress(msg);
+
+  // Find all directories with .claude
+  log('Searching for directories with .claude...');
+  const dirs = await findClaudeDirs({ searchPaths, maxDepth, exclude });
+
+  if (dryRun) {
+    return { dirs, results: [] };
+  }
+
+  const results = [];
+
+  if (sequential) {
+    for (let i = 0; i < dirs.length; i++) {
+      const dir = dirs[i];
+      log(`[${i + 1}/${dirs.length}] Scanning: ${dir}`);
+      
+      try {
+        const result = await runClaudeCommand(dir, claudeArgs, {
+          onStdout: (text) => log(text.trim())
+        });
+        results.push({ dir, success: result.code === 0, ...result });
+      } catch (error) {
+        results.push({ dir, success: false, error: error.message });
+      }
+    }
+  } else {
+    // Parallel execution (be careful with rate limits)
+    const promises = dirs.map(async (dir, i) => {
+      log(`[${i + 1}/${dirs.length}] Scanning: ${dir}`);
+      try {
+        const result = await runClaudeCommand(dir, claudeArgs, {
+          onStdout: (text) => log(text.trim())
+        });
+        return { dir, success: result.code === 0, ...result };
+      } catch (error) {
+        return { dir, success: false, error: error.message };
+      }
+    });
+    
+    results.push(...await Promise.all(promises));
+  }
+
+  return { dirs, results };
 }

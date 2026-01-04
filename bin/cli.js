@@ -32,7 +32,9 @@ import {
   linkLocalRepo,
   unlinkLocalRepo,
   getLocalInfo,
-  generateReadmeFromClsyncJson
+  generateReadmeFromClsyncJson,
+  findClaudeDirs,
+  scanLocalClaudeDirs
 } from "../src/repo-sync.js";
 
 // Get terminal width
@@ -1428,6 +1430,175 @@ program
       console.log(chalk.dim('    clsync promote <name>  # project → user'));
       console.log(chalk.dim('    clsync demote <name>   # user → project\n'));
       
+    } catch (error) {
+      showError(error.message);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// SCAN: Find all .claude directories and run claude command
+// ============================================================================
+program
+  .command("scan")
+  .description("Find all directories with .claude and run claude command on each")
+  .option("-p, --path <paths...>", "Specific paths to search (can specify multiple)")
+  .option("-d, --depth <n>", "Maximum search depth", "4")
+  .option("-e, --exclude <patterns...>", "Patterns to exclude (e.g., node_modules)")
+  .option("-c, --cmd <args>", "Claude command/prompt to run (default: /review)")
+  .option("-l, --list", "Only list directories, don't run commands (dry run)")
+  .option("-i, --interactive", "Run claude interactively for each directory")
+  .option("-v, --verbose", "Show detailed output")
+  .action(async (options) => {
+    try {
+      console.log(chalk.cyan('\n  🔍 Scanning for Claude Code Projects\n'));
+
+      const searchPaths = options.path || undefined;
+      const maxDepth = parseInt(options.depth) || 4;
+      const exclude = options.exclude || undefined;
+      const claudeArgs = options.cmd ? options.cmd.split(' ') : undefined;
+      const dryRun = options.list || false;
+      const verbose = options.verbose || false;
+
+      if (searchPaths) {
+        console.log(chalk.dim(`  Search paths: ${searchPaths.join(', ')}\n`));
+      }
+
+      // First, find all directories
+      const spinner = ora('Searching for .claude directories...').start();
+      
+      const dirs = await findClaudeDirs({
+        searchPaths,
+        maxDepth,
+        exclude
+      });
+
+      spinner.succeed(`Found ${dirs.length} directories with .claude`);
+      console.log();
+
+      if (dirs.length === 0) {
+        console.log(chalk.yellow('  No directories with .claude found.\n'));
+        console.log(chalk.dim('  Tips:'));
+        console.log(chalk.dim('    - Check if you have any Claude Code projects'));
+        console.log(chalk.dim('    - Try specifying a path: clsync scan -p ~/Projects'));
+        console.log(chalk.dim('    - Increase search depth: clsync scan -d 6\n'));
+        process.exit(0);
+      }
+
+      // Display found directories
+      console.log(chalk.white.bold('  📁 Found Projects:\n'));
+      for (let i = 0; i < dirs.length; i++) {
+        const dir = dirs[i];
+        const homeDir = os.homedir();
+        const displayPath = dir.startsWith(homeDir) 
+          ? dir.replace(homeDir, '~') 
+          : dir;
+        console.log(chalk.dim(`     ${String(i + 1).padStart(2)}. ${displayPath}`));
+      }
+      console.log();
+
+      if (dryRun) {
+        console.log(chalk.dim('  (Dry run - no commands executed)\n'));
+        process.exit(0);
+      }
+
+      // Ask for confirmation if running commands
+      const inquirer = await import('inquirer');
+      const { confirm } = await inquirer.default.prompt([
+        {
+          type: 'confirm',
+          name: 'confirm',
+          message: `Run claude ${claudeArgs ? claudeArgs.join(' ') : '/review'} on all ${dirs.length} directories?`,
+          default: false
+        }
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.dim('\n  Cancelled.\n'));
+        process.exit(0);
+      }
+
+      console.log();
+
+      // If interactive mode, run one at a time
+      if (options.interactive) {
+        for (let i = 0; i < dirs.length; i++) {
+          const dir = dirs[i];
+          const homeDir = os.homedir();
+          const displayPath = dir.startsWith(homeDir) 
+            ? dir.replace(homeDir, '~') 
+            : dir;
+          
+          console.log(chalk.cyan(`\n  [${i + 1}/${dirs.length}] 📁 ${displayPath}\n`));
+          
+          const { runThis } = await inquirer.default.prompt([
+            {
+              type: 'confirm',
+              name: 'runThis',
+              message: 'Run claude interactively?',
+              default: true
+            }
+          ]);
+
+          if (runThis) {
+            const { spawn } = await import('child_process');
+            await new Promise((resolve) => {
+              const proc = spawn('claude', claudeArgs || ['/review'], {
+                cwd: dir,
+                stdio: 'inherit',
+                shell: true
+              });
+              proc.on('close', resolve);
+            });
+          }
+        }
+        
+        showSuccess('Scan Complete!');
+      } else {
+        // Non-interactive batch mode
+        const results = await scanLocalClaudeDirs({
+          searchPaths,
+          maxDepth,
+          exclude,
+          claudeArgs,
+          dryRun: false,
+          sequential: true,
+          onProgress: (msg) => {
+            if (verbose) {
+              console.log(chalk.dim(`     ${msg}`));
+            }
+          }
+        });
+
+        console.log(chalk.cyan('\n  📊 Results:\n'));
+        
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const result of results.results) {
+          const homeDir = os.homedir();
+          const displayPath = result.dir.startsWith(homeDir) 
+            ? result.dir.replace(homeDir, '~') 
+            : result.dir;
+
+          if (result.success) {
+            console.log(chalk.green(`     ✓ ${displayPath}`));
+            successCount++;
+          } else {
+            console.log(chalk.red(`     ✗ ${displayPath}`));
+            if (verbose && result.error) {
+              console.log(chalk.dim(`       Error: ${result.error}`));
+            }
+            failCount++;
+          }
+        }
+
+        console.log();
+        console.log(chalk.dim(`  Summary: ${successCount} succeeded, ${failCount} failed\n`));
+        
+        showSuccess('Scan Complete!');
+      }
+
     } catch (error) {
       showError(error.message);
       process.exit(1);
