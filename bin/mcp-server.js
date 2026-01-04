@@ -602,6 +602,23 @@ server.registerTool(
 // =============================================================================
 
 import {
+  initClsync,
+  getStatus,
+  stageItem,
+  stageAll,
+  unstageItem,
+  exportForPush,
+  generateReadmeFromClsyncJson,
+  linkLocalRepo,
+  unlinkLocalRepo,
+  getLocalInfo,
+  fetchOnlineRepoList,
+  pullOnlineRepo,
+  findClaudeDirs,
+  scanLocalClaudeDirs,
+  getClaudeDirsWithCache,
+  getScanCacheInfo,
+  clearScanCache,
   pullFromGitHub,
   pushToGitHub,
   listLocalStaged,
@@ -912,6 +929,475 @@ server.registerTool(
       return { content: [{ type: "text", text }] };
     } catch (error) {
       return { content: [{ type: "text", text: `❌ ${error.message}` }], isError: true };
+    }
+  }
+);
+
+// =============================================================================
+// Init & Status Tools
+// =============================================================================
+
+server.registerTool(
+  "init_clsync",
+  {
+    description: "Initialize ~/.clsync directory structure",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      await initClsync();
+      return {
+        content: [{
+          type: "text",
+          text: "✅ Initialized ~/.clsync directory\n\nCreated:\n- ~/.clsync/local/\n- ~/.clsync/repos/\n- ~/.clsync/manifest.json"
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_status",
+  {
+    description: "Get current clsync status and configuration",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const status = await getStatus();
+
+      let text = "📊 clsync Status\n\n";
+      text += `**Local Staging:**\n`;
+      text += `- Skills: ${status.local.skills}\n`;
+      text += `- Agents: ${status.local.agents}\n`;
+      text += `- Output Styles: ${status.local.output_styles}\n`;
+      text += `- Total: ${status.local.total}\n\n`;
+
+      if (status.repos && status.repos.length > 0) {
+        text += `**Pulled Repos:** ${status.repos.length}\n`;
+        status.repos.forEach(repo => {
+          text += `- ${repo}\n`;
+        });
+      } else {
+        text += `**Pulled Repos:** None\n`;
+      }
+
+      return {
+        content: [{ type: "text", text }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// =============================================================================
+// Stage/Unstage Tools
+// =============================================================================
+
+server.registerTool(
+  "stage_item",
+  {
+    description: "Stage an item from ~/.claude or .claude to local staging area",
+    inputSchema: {
+      itemName: z.string().describe("Name of the item to stage"),
+      scope: z.enum(["user", "project"]).optional().describe("Source scope (default: user)"),
+    },
+  },
+  async ({ itemName, scope = "user" }) => {
+    try {
+      const result = await stageItem(itemName, scope);
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Staged ${result.type}: ${itemName}\n\nFrom: ${scope === "user" ? "~/.claude" : ".claude"}\nTo: ~/.clsync/local/`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "stage_all",
+  {
+    description: "Stage all items from ~/.claude or .claude to local staging area",
+    inputSchema: {
+      scope: z.enum(["user", "project"]).optional().describe("Source scope (default: user)"),
+    },
+  },
+  async ({ scope = "user" }) => {
+    try {
+      const results = await stageAll(scope);
+
+      let text = `✅ Staged ${results.length} items\n\n`;
+      text += `From: ${scope === "user" ? "~/.claude" : ".claude"}\n`;
+      text += `To: ~/.clsync/local/\n\n`;
+
+      if (results.length > 0) {
+        text += "**Staged Items:**\n";
+        results.forEach(item => {
+          const icon = item.type === 'skill' ? '🎯' : item.type === 'agent' ? '🤖' : '✨';
+          text += `${icon} ${item.name}\n`;
+        });
+      }
+
+      return {
+        content: [{ type: "text", text }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "unstage_item",
+  {
+    description: "Remove an item from local staging area",
+    inputSchema: {
+      itemName: z.string().describe("Name of the item to unstage"),
+    },
+  },
+  async ({ itemName }) => {
+    try {
+      await unstageItem(itemName);
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Unstaged: ${itemName}\n\nRemoved from ~/.clsync/local/`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// =============================================================================
+// Export/README/Local Tools
+// =============================================================================
+
+server.registerTool(
+  "export_for_push",
+  {
+    description: "Export staged items to a directory for git push",
+    inputSchema: {
+      outputDir: z.string().describe("Output directory path"),
+      includeReadme: z.boolean().optional().describe("Generate README.md (default: true)"),
+    },
+  },
+  async ({ outputDir, includeReadme = true }) => {
+    try {
+      await exportForPush(outputDir, { includeReadme });
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Exported to: ${outputDir}\n\n${includeReadme ? "README.md generated" : "No README generated"}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "link_local_repo",
+  {
+    description: "Link a GitHub repository to local ~/.clsync for easier push operations",
+    inputSchema: {
+      repoUrl: z.string().describe("GitHub repository URL or 'owner/repo'"),
+    },
+  },
+  async ({ repoUrl }) => {
+    try {
+      await linkLocalRepo(repoUrl);
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Linked local to: ${repoUrl}\n\nYou can now use 'clsync push' without specifying a repo.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "unlink_local_repo",
+  {
+    description: "Unlink the GitHub repository from local ~/.clsync",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      await unlinkLocalRepo();
+      return {
+        content: [{
+          type: "text",
+          text: "✅ Unlinked local repository"
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_local_info",
+  {
+    description: "Get information about local staging area and linked repo",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const info = await getLocalInfo();
+
+      let text = "📦 Local Info\n\n";
+
+      if (info.linkedRepo) {
+        text += `**Linked Repo:** ${info.linkedRepo}\n\n`;
+      } else {
+        text += `**Linked Repo:** None\n\n`;
+      }
+
+      text += `**Staged Items:**\n`;
+      text += `- Skills: ${info.stats.skills}\n`;
+      text += `- Agents: ${info.stats.agents}\n`;
+      text += `- Output Styles: ${info.stats.output_styles}\n`;
+      text += `- Total: ${info.stats.total}\n`;
+
+      return {
+        content: [{ type: "text", text }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// =============================================================================
+// Online Registry & Scan Tools
+// =============================================================================
+
+server.registerTool(
+  "list_online_repos",
+  {
+    description: "List available repositories from the online clsync registry",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const repos = await fetchOnlineRepoList();
+
+      if (repos.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: "📚 No repositories found in online registry"
+          }]
+        };
+      }
+
+      let text = `📚 Online Registry (${repos.length} repos)\n\n`;
+      repos.forEach(repo => {
+        text += `**${repo.name}**\n`;
+        if (repo.description) {
+          text += `${repo.description}\n`;
+        }
+        text += `Repo: ${repo.repo}\n`;
+        if (repo.author) {
+          text += `Author: ${repo.author}\n`;
+        }
+        text += `\n`;
+      });
+
+      return {
+        content: [{ type: "text", text }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "pull_online_repo",
+  {
+    description: "Pull a repository from the online clsync registry",
+    inputSchema: {
+      repoName: z.string().describe("Repository name from online registry"),
+      force: z.boolean().optional().describe("Force overwrite if exists"),
+    },
+  },
+  async ({ repoName, force = false }) => {
+    try {
+      const repos = await fetchOnlineRepoList();
+      const repoInfo = repos.find(r => r.name === repoName);
+
+      if (!repoInfo) {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ Repository "${repoName}" not found in online registry`
+          }],
+          isError: true
+        };
+      }
+
+      await pullOnlineRepo(repoInfo, { force });
+
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Pulled: ${repoInfo.name}\n\nFrom: ${repoInfo.repo}\n\nUse apply_setting to install items.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "scan_claude_dirs",
+  {
+    description: "Scan local filesystem for directories containing .claude subdirectories",
+    inputSchema: {
+      searchPaths: z.array(z.string()).optional().describe("Custom paths to search"),
+      maxDepth: z.number().optional().describe("Maximum directory depth (default: 4)"),
+      useCache: z.boolean().optional().describe("Use cached results (default: true)"),
+      forceRefresh: z.boolean().optional().describe("Force cache refresh"),
+    },
+  },
+  async ({ searchPaths, maxDepth = 4, useCache = true, forceRefresh = false }) => {
+    try {
+      const { dirs, fromCache, scannedAt } = await getClaudeDirsWithCache({
+        searchPaths,
+        maxDepth,
+        useCache,
+        forceRefresh
+      });
+
+      let text = `🔍 Found ${dirs.length} directories with .claude\n\n`;
+
+      if (fromCache) {
+        text += `📦 From cache (scanned: ${new Date(scannedAt).toLocaleString()})\n\n`;
+      } else {
+        text += `🔄 Fresh scan\n\n`;
+      }
+
+      if (dirs.length > 0) {
+        text += "**Directories:**\n";
+        dirs.forEach(dir => {
+          text += `- ${dir}\n`;
+        });
+      }
+
+      return {
+        content: [{ type: "text", text }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_scan_cache_info",
+  {
+    description: "Get information about the scan cache",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const info = await getScanCacheInfo();
+
+      let text = "📦 Scan Cache Info\n\n";
+
+      if (info.exists) {
+        text += `**Status:** Exists\n`;
+        text += `**Directories:** ${info.dirCount}\n`;
+        text += `**Scanned:** ${new Date(info.scannedAt).toLocaleString()}\n`;
+        text += `**Valid:** ${info.isValid ? "Yes" : "No (expired)"}\n`;
+      } else {
+        text += `**Status:** No cache\n`;
+      }
+
+      return {
+        content: [{ type: "text", text }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "clear_scan_cache",
+  {
+    description: "Clear the scan cache to force a fresh scan next time",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      await clearScanCache();
+      return {
+        content: [{
+          type: "text",
+          text: "✅ Scan cache cleared\n\nNext scan will be fresh."
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `❌ Error: ${error.message}` }],
+        isError: true
+      };
     }
   }
 );
